@@ -1,27 +1,63 @@
 cd("/home/oskar/Documents/BU/Research/Annealing")
 
+"""
+  Random vertex lattice module
+  First instance February 2017 by Oskar Pfeffer
+
+"""
 module annealing
   push!(LOAD_PATH, pwd())
-  import Graphslib
-  Gl = Graphslib
+  using Graphslib
+  import StatsBase.counts
+  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, vertex_lattice_gategraph, vertex_lattice, compute_energy, solve_gategraph!, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution
 
+  # Faster and nicer definition for AND and OR
   ∧(A::Bool, B::Bool) = A && B
   ∨(A::Bool, B::Bool) = A || B
 
-  function idxtopos(i::Int, ds::Array{Int})
-    x = round(Int, i/(ds[2]), RoundUp)
-    y = i - ds[2] * (x-1)
-    return [x,y]
+  function idxtovec(i::Int,l::Array{Int})
+    """ Transforms scalar index to vector index. """
+    ( i > prod(l)) && (return nothing)
+    ( i < 1 ) && (return nothing)
+    a = zeros(Int, (length(l)+1))
+    idxtovec = zeros(Int, length(l))
+    a[1] = 1
+    a[2:end] = l
+    for j in length(l):-1:1
+      idxtovec[j] = fld((i-1),prod(a[1:j])) % a[j+1] + 1
+    end
+    return idxtovec
+  end
+
+  function vectoidx(r::Array{Int},l::Array{Int})
+    """ Transforms vector index to scalar index. """
+    ( length(l) != length(r) ) && (return nothing)
+    vectoidx = 0
+    a = zeros(Int, length(l)+1)
+    a[1] = 1
+    a[2:end] = l
+    for i in length(l):-1:1
+      ( r[i] > l[i] ) && (return nothing)
+      ( r[i] < 1 ) && (return nothing)
+      vectoidx += prod(a[1:i])*(r[i]-1)
+    end
+    vectoidx + 1
+  end
+
+  function idxtopos(i::Int,ds::Array{Int})
+    """ Index to position vector. Index along y first. """
+    return (idxtovec(i,ds[end:-1:1]))[end:-1:1]
   end
 
   function postoidx(pos::Array{Int}, ds::Array{Int})
-    return (pos[1]-1) * ds[2] + pos[2]
+    """ Position vector to index. Index along y first. """
+    return vectoidx(Array(pos)[end:-1:1],ds[end:-1:1])
   end
 
   # 2-bit gates
   function swap(i::Int, swap1::Int=1, swap2::Int=2, reverse::Bool=false)
-    a = bits(i)
-    a = a[1:end-swap2] * string(a[end-swap1+1]) * string(a[end-swap2+1]) * a[end-swap1+2:end]
+    a = bin(i,swap2)[end-swap2+1:end]
+    a = string(a[end-swap1+1]) * string(a[end-swap2+1]) * string(a[end-swap1+2:end])
     parse(Int,a,2)
   end
   function iden(i::Int, reverse::Bool=false) i end
@@ -32,13 +68,40 @@ module annealing
     return i
   end
   function idid(i::Int, reverse::Bool=false)  i end
-  function swid(i::Int, reverse::Bool=false)  swap(i, 2, 3) end
-  function idsw(i::Int, reverse::Bool=false)  swap(i, 1, 2) end
+  function swid(i::Int, reverse::Bool=false)
+    i==2 && (return 4)
+    i==3 && (return 5)
+    i==4 && (return 6)
+    i==5 && (return 3)
+    return i
+    #return swap(i, 2, 3)
+  end
+  function idsw(i::Int, reverse::Bool=false)
+    i==1 && (return 2)
+    i==2 && (return 1)
+    i==5 && (return 6)
+    i==6 && (return 5)
+    return i
+    #return swap(i, 1, 2)
+  end
   function swsw(i::Int, reverse::Bool=false)
-    reverse ? return swap(swap(i,1,2),2,3) : return swap(swap(i,2,3),1,2)
+    if reverse
+      i==1 && (return 4); i==2 && (return 1); i==3 && (return 5)
+      i==4 && (return 2); i==5 && (return 6); i==6 && (return 3)
+      return i
+    else
+      i==1 && (return 2); i==2 && (return 4); i==3 && (return 6)
+      i==4 && (return 1); i==5 && (return 3); i==6 && (return 5)
+      return i
+    end
+    #reverse ? swap(swap(i,1,2),2,3) : swap(swap(i,2,3),1,2)
   end
 
   function random_gatemap(ds::Array{Int}, ps::Array)
+    """
+    Returns a random gatemap (Integer from 1 to length(ps)) for a rectangular
+    n-dimensional lattice with given probabilities ps for each gate
+    """
     ps /= sum(ps)
     ngates = prod(ds)
     gm = zeros(Int, ngates)
@@ -57,8 +120,12 @@ module annealing
   end
 
   function vertex_lattice_gategraph(ds::Array{Int})
+    """
+    Returns an initialized graph with connected vertices for a 2-dimensional
+    vertex lattice.
+    """
     ngates = prod(ds)
-    g = Gl.newgraph(ngates)
+    g = newgraph(ngates)
     g.vs["state"] = -1 * ones(Int, ngates)
 
     for i in 1:ngates
@@ -71,7 +138,7 @@ module annealing
     for vertex1_index in 1: ngates - ds[2]
       pos = idxtopos(vertex1_index,ds)
       vertex2_index = postoidx(pos + [1,0], ds)
-      Gl.add_edges!(g, vertex1_index, vertex2_index)
+      add_edges!(g, vertex1_index, vertex2_index)
 
       edge_index += 1
 
@@ -90,7 +157,7 @@ module annealing
         y = ds[2]
       end
       vertex2_index = postoidx( [pos[1]+1, y], ds)
-      Gl.add_edges!(g, vertex1_index, vertex2_index)
+      add_edges!(g, vertex1_index, vertex2_index)
 
       edge_index += 1
 
@@ -103,7 +170,7 @@ module annealing
     return g
   end
 
-  function vertex_lattice(ds::Array{Int}, gates::Array, nbits, gm::Array{Int}=Array{Int}(0), st::Array{Int}=Array{Int}(0), ps::Array{AbstractFloat}=Array{AbstractFloat}(0))
+  function vertex_lattice(ds::Array{Int}, gates::Array, nbits; gm::Array{Int}=Array{Int}(0), st::Array{Int}=Array{Int}(0), ps::Array{AbstractFloat}=Array{AbstractFloat}(0))
 
     if typeof(nbits) ≡ Int
       nbits = nbits * ones(Int, length(gates))
@@ -129,7 +196,7 @@ module annealing
       g.vs[i]["gate"] = gates[g.vs[i]["type"]]
       g.vs[i]["nbits"] = nbits[g.vs[i]["type"]]
     end
-    isempty(st) || g.vs["state"] = st
+    isempty(st) || (g.vs["state"] = st)
     # g.vs["tensor"] = init_tensors(g)
     return g
   end
@@ -137,41 +204,58 @@ module annealing
   function compute_energy(gate1::Function, gate2::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int)
     energy = 0
     for i in 1:length(bits1)
-      energy += bits(gate1(state1))[end-bits1[i]+1] !== bits(gate2(state2))[end-bits2[i]+1]
+      energy += (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
     end
     energy
   end
 
-  function solve_gategraph!(g::Gl.Graph)
+  function compute_energydiffsource(gate1::Function, gate2::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int, state1new::Int)
+    energy = 0
+    for i in 1:length(bits1)
+      energy -= (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
+      energy += (bin(gate1(state1new), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
+    end
+    energy
+  end
+  function compute_energydifftarget(gate1::Function, gate2::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int, state1new::Int)
+    energy = 0
+    for i in 1:length(bits1)
+      energy -= (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
+      energy += (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state1new, 3)[end + 1 - bits2[i]])
+    end
+    energy
+  end
+
+  function solve_gategraph!(g::Graph)
 
     for vertex in g.vs
       vertex["state"] ≠ -1 && continue
-      neighbors_index = Gl.neighbors(g, vertex, true, false)
+      neighbors_index = neighbors(g, vertex, true, false)
       isempty(neighbors_index) && continue
       -1 in g.vs[neighbors_index]["state"] && continue
       gatebits = Array{String}(vertex["nbits"])
       for neighbor in g.vs[neighbors_index]
-        edge_index = Gl.get_eid(g, neighbor.index, vertex.index)
+        edge_index = get_eid(g, neighbor.index, vertex.index)
         gatebits[g.es[edge_index]["bits"][2]] = split(bits(neighbor["gate"](neighbor["state"]))[end+1-g.es[edge_index]["bits"][1]], "")
       end
       vertex["state"] = parse(Int, join(gatebits[end:-1:1]),2)
     end
     for vertex in g.vs[end:-1:1]
       vertex["state"] ≠ -1 && continue
-      neighbors_index = Gl.neighbors(g, vertex, false, true)
+      neighbors_index = neighbors(g, vertex, false, true)
       isempty(neighbors_index) && continue
       -1 in g.vs[neighbors_index]["state"] && continue
       gatebits = Array{String}(vertex["nbits"])
       for neighbor in g.vs[neighbors_index]
-        edge_index = Gl.get_eid(g, neighbor.index, vertex.index)
+        edge_index = get_eid(g, neighbor.index, vertex.index)[1]
         gatebits[g.es[edge_index]["bits"][1]] = split(bits(neighbor["gate"](neighbor["state"]))[end+1-g.es[edge_index]["bits"][2]], "")
       end
-      vertex["state"] = parse(Int,join(gatebits[end:-1:1]),2)
+      vertex["state"] = parse(Int, join(gatebits[end:-1:1]),2)
     end
     return g.vs["state"]
   end
 
-  function check_graph_solution(g::Gl.Graph)
+  function check_graph_solution(g::Graph)
     errnumber = 0
     for edge in g.es
       if g.vs[edge.source]["state"] ≡ -1 || g.vs[edge.target]["state"] ≡ -1 continue end
@@ -182,107 +266,247 @@ module annealing
     end
     errnumber ≠ 0 && println("$errnumber edges don't match in the graph.")
   end
-end
+
+
+  function init_annealing!(g::Graph, ds::Array{Int}, fixed_left::Array{Int}=Array{Int,2}(), fixed_right::Array{Int}=Array{Int,2}())
+    g.vs[1 : end]["state"] = rand(0:7, length(g.vs["state"]))
+    g.vs["fixed"] = false
+    g.vs[fixed_left[:,1]]["fixed"] = true
+    g.vs[end - ds[2] + fixed_right[:,1]]["fixed"] = true
+    g.vs[fixed_left[:,1]]["state"] = fixed_left[:,2]
+    g.vs[end - ds[2] + fixed_right[:,1]]["state"] = fixed_right[:,2]
+    return
+  end
+
+
+  function anneal!(g::Graph, ds::Array{Int},
+     mcsteps::Int=1000, βₘᵢₙ::AbstractFloat=0.,
+     βₘₐₓ::AbstractFloat=4., majority_steps::Int=100,
+     majority_cutoff::AbstractFloat=0.9)
+
+    Δβ = (βₘₐₓ - βₘᵢₙ) / mcsteps
+    States = Array{Int}(length(g.vs), majority_steps)
+    for j in 1:majority_steps
+      β = βₘᵢₙ
+      for vertex in g.vs
+        vertex["fixed"] || (vertex["state"] = rand(0:7))
+      end
+      for i in 1:mcsteps
+        montecarlo!(g, β)
+        β += Δβ
+      end
+      States[:,j] = g.vs["state"]
+    end
+    majority_steps > 1 && majority(g, States, majority_cutoff, majority_steps)
+    return
+  end
+
+
+  function montecarlo!(g::Graph, β::AbstractFloat)
+    @fastmath for i in 1:length(g.vs)
+      vertex = g.vs[rand(1:length(g.vs))]
+      vertex["fixed"] && continue
+      newstate = rand(0:7)
+      newstate == vertex["state"] && continue
+      neighbor_vertices_index = neighbors(g, vertex)
+      ΔE = 0.
+      for neighbor_vertex_index in neighbor_vertices_index
+        neighbor_vertex = g.vs[neighbor_vertex_index]
+        edge = g.es[get_eid(g, vertex.index, neighbor_vertex.index)[1]]
+        if edge.source == vertex.index
+          ΔE += compute_energydiffsource(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], vertex["state"], neighbor_vertex["state"], newstate)
+        else
+          ΔE += compute_energydifftarget(neighbor_vertex["gate"],vertex["gate"], edge["bits"][1], edge["bits"][2],neighbor_vertex["state"], vertex["state"], newstate)
+        end
+      end
+      if rand() < exp(- β * ΔE)
+        vertex["state"] = newstate
+      end
+    end
+  end
+
+  function majority(g::Graph, States::Array{Int}, majority_cutoff::AbstractFloat, majority_steps::Int)
+    for i in 1:length(g.vs)
+      state_counts = counts(States[i,:], 0:7) ./ majority_steps
+      print(state_counts)
+      for (j, state_count) in enumerate(state_counts)
+        if state_count ≥ majority_cutoff
+          g.vs[i]["state"] = j-1
+          g.vs[i]["fixed"] = true
+        end
+      end
+    end
+  end
+  function totalunfits(g::Graph)
+    energy = 0
+    for vertex in g.vs
+      neighbor_vertices_index = neighbors(g,vertex,false, true )
+      for neighbor_vertex_index in neighbor_vertices_index
+        neighbor_vertex = g.vs[neighbor_vertex_index]
+        edge = g.es[get_eid(g, vertex.index, neighbor_vertex.index)[1]]
+        energy += compute_energy(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], vertex["state"], neighbor_vertex["state"])
+      end
+    end
+    energy
+  end
+
+  """
+  BETA ALERT: FUNCTION SHOULD WORK PROPERLY, BUT WAS NOT YET THROUGLY TESTED.
+  IF ANY ERROR SHOULD OCCUR PLESE REPORT!
+  Function checks if the graph with the given parameters has a
+  unique solution.
+  The function returns the states of the fixed gates on each side.
+  If No unique solution is found, the function tries over up to
+  100 different configurations of states for of the fixed gates.
+  If gm (gatemap) is given, it will try if that particular configuration
+  has a unique solution.
+
+  ds are the dimensions of the graph (i.e. (lx,ly))
+  fixed_left are the states to be fixed on the left side.
+  fixed_right are the states to be fixed on the right side.
+  g is the optional graph that can be passed to work on
+  gm is the optional gatemap
+  gates is a list with the functions of the gates of the graph
+  nbits are the number of bits of each gate
+  """
+  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=nothing, gates=nothing, nbits::Int=3, trials::Int=0)
+    # Number of possible states per gate
+    nstates = 2^nbits
+    # If no graph provided, create a new one
+    (g ≡ nothing) && (g = vertex_lattice(ds, gates, nbits, gm = gm)) || (gm = 1)
+    # gm = 1 for the return statement
+    g.vs["state"] = -1
+    # Chooses which way of checking is faster (from right to left or left to right)
+    if length(fixed_left) ≥ length(fixed_right)
+      g.vs[fixed_left]["state"] = rand(0:nstates, length(fixed_left))
+      not_fixed_left = Array{Int,1}()
+      for i in 1:ds[2]
+        g.vs[i]["state"] == -1 && push!(not_fixed_left, i)
+      end
+      unfixed = length(not_fixed_left)
+
+      # left_states and right_states are 2d arrays with dimensions [2,ds[1]]
+      # where the dimension [0,:] is the gate row_index and [1,:] the state
+      left_states = hcat(1:ds[2], zeros(Int, ds[2]))
+      left_states[fixed_left, 2] = g.vs["state"][fixed_left]
+      g.vs[left_states[:,1]]["state"] = left_states[:,2]
+      solve_gategraph!(g)
+      # Those right_states will be checked for uniqueness
+      right_states = hcat(1:ds[2], g.vs[end - ds[2] + 1:end]["state"])
+
+      i = 1
+      while i < nstates^unfixed
+        i += 1
+        # pos iterates over the states of the unfixed gates i.e. [0,0,1] ..
+        # [0,0,2]
+        pos = idxtopos(i, ones(Int, unfixed) * nstates) .- 1
+        left_states[not_fixed_left, 2] = pos
+        g.vs["state"] = -1
+        g.vs[left_states[:,1]]["state"] = left_states[:,2]
+        solve_gategraph!(g)
+
+        # saved right_states before the loop are compared to the current
+        # ones
+        if any((right_states[fixed_right, 2] - g.vs[end - ds[2] + fixed_right]["state"]) .≠ 0)
+          continue
+        else
+        print("Found double solution")
+          if trials < 10
+            println("trying new random fixed states")
+            return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials + 1)
+          else
+            println("tried 10 times, still no solution")
+            return
+          end
+        end
+      end
+    else
+      g.vs[end - ds[2] + fixed_right]["state"] = rand(0:nstates, length(fixed_right))
+      not_fixed_right = Array{Int,1}()
+      for i in 1:ds[2]
+        (g.vs[end-ds[2]+i]["state"] == -1) && push!(not_fixed_right, i)
+      end
+      unfixed = length(not_fixed_right)
+
+      # left_states and right_states are 2d arrays with dimensions [2,ds[1]]
+      # where the dimension [0,:] is the gate row_index and [1,:] the state
+      right_states = hcat(1:ds[2], zeros(Int, ds[2])) #####array((np.arange(0, ds[1]), np.zeros(ds[1])), int)
+      right_states[fixed_right, 2] = g.vs[end - ds[2] + 1 + fixed_right]["state"]
+      g.vs[end - ds[2] + right_states[:,1]]["state"] = right_states[:,2]
+      solve_gategraph!(g)
+      # Those right_states will be checked for uniqueness
+      left_states = hcat(1:ds[2], g.vs[1:ds[2]]["state"])
+
+      i = 1
+      while i < nstates^unfixed
+        i += 1
+        # pos iterates over the states of the unfixed gates i.e. [0,0,1] .. [0,0,2]
+        pos = idxtopos(i, ones(Int, unfixed) * nstates) .- 1
+        right_states[not_fixed_right, 2] = pos
+        g.vs["state"] = -1
+        g.vs[end - ds[2] + right_states[:,1]]["state"] = right_states[:,2]
+        solve_gategraph!(g)
+
+        # saved right_states before the loop are compared to the current ones
+        if (any((left_states[fixed_left, 2] - g.vs[fixed_left]["state"]) .≠ 0))
+          continue
+        else
+        print("Found double solution")
+          if(trials < 10)
+            println("trying new random fixed states")
+            return unique_solution(ds, fixed_left, fixed_right, g=g, trials = trials + 1)
+          else
+            println("tried 10 times, still no solution")
+            return
+          end
+        end
+      end
+    end
+    # If no graph, nor gatemap was provided, then the gatemap
+    # produced in the function is passed.
+    # Returned are only the states of the fixed gates.
+    ((gm ≡ nothing) && (return left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["gate"][:])) ||
+      (return left_states[fixed_left, 2], right_states[fixed_right, 2])
+  end
+  end
 #################################################################################################################################################################
 
-function init_annealing!(g::Gl.Graph, ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int})
-  g.vs["state"] = rand(1:8, length(g.vs["state"]))
-  g.vs["fixed"] = false
-  g.vs[fixed_left]["fixed"] = true
-  g.vs[end - ds[2] + fixed_right]["fixed"] = true
-  return
-end
-
-
-function anneal!(g::Gl.Graph, mcsteps::Int=1000, βₘᵢₙ::AbstractFloat=0., βₘₐₓ::AbstractFloat=4., majority_steps::Int=100, majority_cutoff::AbstractFloat=0.9)
-  Δβ = (βₘₐₓ - βₘᵢₙ) / mcsteps
-  States = Array{Int}(length(g.vs), majority_steps)
-  for j in 1:majority_steps
-    β = βₘᵢₙ
-    for i in 1:mcsteps
-      montecarlo(g, β)
-      β += Δβ
-    end
-    States[:,j] = g.vs["state"]
-  end
-  #majority(g, States, majority_cutoff, majority_steps)
-end
-
-function montecarlo!(g::Gl.Graph, β::AbstractFloat)
-  for i in 1:length(g.vs)
-    Vert = g.vs[rand(1:length(g.vs))]
-    Vert["fixed"] && continue
-    neighbor_vertices_index = Gl.neighbors(g, Vert)
-    ΔE = 0
-    for neighbor_Vert_index in neighbor_vertices_index
-      neighbor_Vert = g.vs[neighbor_Vert_index]
-      edge = g.es[Gl.get_eid(g, Vert.index, neighbor_Vert.index)[1]]
-      if edge.source == Vert.index
-        ΔE -= an.compute_energy(Vert["gate"], neighbor_Vert["gate"], edge["bits"][1], edge["bits"][2], Vert["state"], neighbor_Vert["state"])
-      else
-        ΔE -= an.compute_energy(Vert["gate"], neighbor_Vert["gate"], edge["bits"][2], edge["bits"][1], Vert["state"], neighbor_Vert["state"])
-      end
-    end
-      newstate = rand(1:8)
-
-    for neighbor_Vert_index in neighbor_vertices_index
-      neighbor_Vert = g.vs[neighbor_Vert_index]
-      edge = g.es[Gl.get_eid(g, Vert.index, neighbor_Vert.index)[1]]
-      if edge.source == Vert.index
-        ΔE += an.compute_energy(Vert["gate"], neighbor_Vert["gate"], edge["bits"][1], edge["bits"][2], newstate, neighbor_Vert["state"])
-      else
-        ΔE += an.compute_energy(Vert["gate"], neighbor_Vert["gate"], edge["bits"][2], edge["bits"][1], newstate, neighbor_Vert["state"])
-      end
-      rand() < exp(- β * ΔE) && Vert["state"] = newstate
-    end
-  end
-end
-
-function majority(g::Gl.Graph, States::Array{Int}, majority_cutoff::AbstractFloat, majority_steps::Int)
-  for i in 1:length(g.vs)
-    state_counts = counts(States[i,:], 1:8) / majority_steps
-    for (j, state_count) in enumerate(state_counts)
-      if state_count > majority_cutoff
-        g.vs[i]["state"] = j
-        g.vs[i]["fixed"] = true
-      end
-    end
-  end
-end
-
-
-import StatsBase.counts
 
 
 
-Gl = Graphslib
+
+using Graphslib
 using annealing
-an = annealing
-supertype(an.idid)
-gates = [an.idid]
-ds = [40,20]
-32*4
-@time anneal!(g, 2^10, 0., 8., 1, 0.9)
-g = an.vertex_lattice(ds,gates, 3)
-g.vs[fixed_left]["fixed"] = true
-fixed_right = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
-fixed_left = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
-init_annealing!(g, ds, fixed_left, fixed_right)
-g.vs["fixed"]
-g.vs["fixed"] = false
-g.vs[1].index
-g.vs["state"] = Array{Int}(g.vs["state"])
+import plotting
+g.vs[fixed_left]["state"] = rand(0:7, length(fixed_left))
 g.vs["state"]
-print(g.vs["fixed"])
-Gl.get_eid(g,1,6)
-g = vertex_lattice_gategraph([10,5])
-g.vs["type"] = gm
-ps =rand(5)
-gates[g.vs[1]["type"]]
+gates = [idid, toff, swsw, swid, idsw]
 ds = [10,5]
-a = [1]
-gm = random_gatemap(ds,ps)
-g.vs[1]["type"]
-length(g.vs) == length(gm)
-end
-Pkg.add("GLVisualize.jl"))
+g = vertex_lattice(ds,gates, 3)
+left_states = hcat(1:4, zeros(Int, 4))
+right_states = hcat(1:4, zeros(Int, 4))
+fixed_left = [1,2,3,4]#,5,6,7,8,9,10,11,12,13,14,15,16,17, 18]
+fixed_right = [1,2,3,4]#,5,6,7,8,9,10,11,12,13,14,15,16]
+left_states[:,2], right_states[:,2] = unique_solution(ds, fixed_left, fixed_right, g=g)
+init_annealing!(g, ds, left_states, right_states)
+@time anneal!(g,ds,2^15,  2.5, 6.,1, 0.89)
+totalunfits(g)
+pythonplot.plotit(g)
+
+left_states
+sum(g.vs["fixed"])
+@time montecarlo3!(g,5.)
+vertex = g.vs[20]
+neighbors(g,20
+neighbor_vertex = g.vs[11]
+get_eid(g, 20,11)
+edge = g.es[22]
+@time compute_energydiff(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], 2, neighbor_vertex["state"],5)
+@time compute_energy1(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], 5, neighbor_vertex["state"])
+512*50/1024
+g.vs["state"]
+g.vs["state"] = -1
+g.vs[1:4]["state"] = left_states[:,2]
+g.vs[5]["state"] = 0
+solution = solve_gategraph!(g)
+println(g.vs["state"]-solution)
