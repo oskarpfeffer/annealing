@@ -1,5 +1,3 @@
-cd("/home/oskar/Documents/BU/Research/Annealing")
-
 """
   Random vertex lattice module
   First instance February 2017 by Oskar Pfeffer
@@ -202,7 +200,7 @@ module annealing
   end
 
   function compute_energy(gate1::Function, gate2::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int)
-    energy = 0
+    energy = 0.
     for i in 1:length(bits1)
       energy += (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
     end
@@ -210,7 +208,7 @@ module annealing
   end
 
   function compute_energydiffsource(gate1::Function, gate2::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int, state1new::Int)
-    energy = 0
+    energy = 0.
     for i in 1:length(bits1)
       energy -= (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
       energy += (bin(gate1(state1new), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
@@ -218,7 +216,7 @@ module annealing
     energy
   end
   function compute_energydifftarget(gate1::Function, gate2::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int, state1new::Int)
-    energy = 0
+    energy = 0.
     for i in 1:length(bits1)
       energy -= (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
       energy += (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state1new, 3)[end + 1 - bits2[i]])
@@ -227,7 +225,6 @@ module annealing
   end
 
   function solve_gategraph!(g::Graph)
-
     for vertex in g.vs
       vertex["state"] ≠ -1 && continue
       neighbors_index = neighbors(g, vertex, true, false)
@@ -279,14 +276,15 @@ module annealing
   end
 
 
-  function anneal!(g::Graph, ds::Array{Int},
+  function anneal!(g::Graph, ds::Array{Int};
      mcsteps::Int=1000, βₘᵢₙ::AbstractFloat=0.,
      βₘₐₓ::AbstractFloat=4., majority_steps::Int=100,
      majority_cutoff::AbstractFloat=0.9)
 
     Δβ = (βₘₐₓ - βₘᵢₙ) / mcsteps
     States = Array{Int}(length(g.vs), majority_steps)
-    for j in 1:majority_steps
+
+    @parallel for j in 1:majority_steps
       β = βₘᵢₙ
       for vertex in g.vs
         vertex["fixed"] || (vertex["state"] = rand(0:7))
@@ -297,13 +295,13 @@ module annealing
       end
       States[:,j] = g.vs["state"]
     end
-    majority_steps > 1 && majority(g, States, majority_cutoff, majority_steps)
+    majority_steps > 1 && (return majority(g, States, majority_cutoff, majority_steps))
     return
   end
 
 
   function montecarlo!(g::Graph, β::AbstractFloat)
-    @fastmath for i in 1:length(g.vs)
+    for i in 1:length(g.vs)
       vertex = g.vs[rand(1:length(g.vs))]
       vertex["fixed"] && continue
       newstate = rand(0:7)
@@ -326,17 +324,19 @@ module annealing
   end
 
   function majority(g::Graph, States::Array{Int}, majority_cutoff::AbstractFloat, majority_steps::Int)
+    state_counts = Array{Array{Float64},1}()
     for i in 1:length(g.vs)
-      state_counts = counts(States[i,:], 0:7) ./ majority_steps
-      print(state_counts)
-      for (j, state_count) in enumerate(state_counts)
+      append!(state_counts, [counts(States[i,:], 0:7) ./ majority_steps])
+      for (j, state_count) in enumerate(state_counts[i])
         if state_count ≥ majority_cutoff
           g.vs[i]["state"] = j-1
           g.vs[i]["fixed"] = true
         end
       end
     end
+    return state_counts
   end
+
   function totalunfits(g::Graph)
     energy = 0
     for vertex in g.vs
@@ -369,7 +369,7 @@ module annealing
   gates is a list with the functions of the gates of the graph
   nbits are the number of bits of each gate
   """
-  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=nothing, gates=nothing, nbits::Int=3, trials::Int=0)
+  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=nothing, gates=nothing, nbits::Int=3, solution::Bool=false, trials::Int=0)
     # Number of possible states per gate
     nstates = 2^nbits
     # If no graph provided, create a new one
@@ -378,7 +378,7 @@ module annealing
     g.vs["state"] = -1
     # Chooses which way of checking is faster (from right to left or left to right)
     if length(fixed_left) ≥ length(fixed_right)
-      g.vs[fixed_left]["state"] = rand(0:nstates, length(fixed_left))
+      g.vs[fixed_left]["state"] = rand(0:nstates-1, length(fixed_left))
       not_fixed_left = Array{Int,1}()
       for i in 1:ds[2]
         g.vs[i]["state"] == -1 && push!(not_fixed_left, i)
@@ -390,7 +390,7 @@ module annealing
       left_states = hcat(1:ds[2], zeros(Int, ds[2]))
       left_states[fixed_left, 2] = g.vs["state"][fixed_left]
       g.vs[left_states[:,1]]["state"] = left_states[:,2]
-      solve_gategraph!(g)
+      sol = solve_gategraph!(g)
       # Those right_states will be checked for uniqueness
       right_states = hcat(1:ds[2], g.vs[end - ds[2] + 1:end]["state"])
 
@@ -413,7 +413,7 @@ module annealing
         print("Found double solution")
           if trials < 10
             println("trying new random fixed states")
-            return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials + 1)
+            return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials + 1, solution=solution)
           else
             println("tried 10 times, still no solution")
             return
@@ -430,10 +430,10 @@ module annealing
 
       # left_states and right_states are 2d arrays with dimensions [2,ds[1]]
       # where the dimension [0,:] is the gate row_index and [1,:] the state
-      right_states = hcat(1:ds[2], zeros(Int, ds[2])) #####array((np.arange(0, ds[1]), np.zeros(ds[1])), int)
+      right_states = hcat(1:ds[2], zeros(Int, ds[2]))
       right_states[fixed_right, 2] = g.vs[end - ds[2] + 1 + fixed_right]["state"]
       g.vs[end - ds[2] + right_states[:,1]]["state"] = right_states[:,2]
-      solve_gategraph!(g)
+      sol = solve_gategraph!(g)
       # Those right_states will be checked for uniqueness
       left_states = hcat(1:ds[2], g.vs[1:ds[2]]["state"])
 
@@ -454,7 +454,7 @@ module annealing
         print("Found double solution")
           if(trials < 10)
             println("trying new random fixed states")
-            return unique_solution(ds, fixed_left, fixed_right, g=g, trials = trials + 1)
+            return unique_solution(ds, fixed_left, fixed_right, g=g, trials = trials + 1, solution=solution)
           else
             println("tried 10 times, still no solution")
             return
@@ -465,48 +465,20 @@ module annealing
     # If no graph, nor gatemap was provided, then the gatemap
     # produced in the function is passed.
     # Returned are only the states of the fixed gates.
-    ((gm ≡ nothing) && (return left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["gate"][:])) ||
-      (return left_states[fixed_left, 2], right_states[fixed_right, 2])
+    if gm ≡ nothing
+      if solution
+        return (left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["gate"][:], sol)
+      else
+        return (left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["gate"][:])
+      end
+    else
+      if solution
+        return (left_states[fixed_left, 2], right_states[fixed_right, 2], sol)
+      else
+        return (left_states[fixed_left, 2], right_states[fixed_right, 2])
+      end
+    end
   end
+
   end
 #################################################################################################################################################################
-
-
-
-
-
-using Graphslib
-using annealing
-import plotting
-g.vs[fixed_left]["state"] = rand(0:7, length(fixed_left))
-g.vs["state"]
-gates = [idid, toff, swsw, swid, idsw]
-ds = [10,5]
-g = vertex_lattice(ds,gates, 3)
-left_states = hcat(1:4, zeros(Int, 4))
-right_states = hcat(1:4, zeros(Int, 4))
-fixed_left = [1,2,3,4]#,5,6,7,8,9,10,11,12,13,14,15,16,17, 18]
-fixed_right = [1,2,3,4]#,5,6,7,8,9,10,11,12,13,14,15,16]
-left_states[:,2], right_states[:,2] = unique_solution(ds, fixed_left, fixed_right, g=g)
-init_annealing!(g, ds, left_states, right_states)
-@time anneal!(g,ds,2^15,  2.5, 6.,1, 0.89)
-totalunfits(g)
-pythonplot.plotit(g)
-
-left_states
-sum(g.vs["fixed"])
-@time montecarlo3!(g,5.)
-vertex = g.vs[20]
-neighbors(g,20
-neighbor_vertex = g.vs[11]
-get_eid(g, 20,11)
-edge = g.es[22]
-@time compute_energydiff(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], 2, neighbor_vertex["state"],5)
-@time compute_energy1(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], 5, neighbor_vertex["state"])
-512*50/1024
-g.vs["state"]
-g.vs["state"] = -1
-g.vs[1:4]["state"] = left_states[:,2]
-g.vs[5]["state"] = 0
-solution = solve_gategraph!(g)
-println(g.vs["state"]-solution)
