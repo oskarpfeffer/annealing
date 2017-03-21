@@ -262,6 +262,7 @@ module annealing
       end
     end
     errnumber ≠ 0 && println("$errnumber edges don't match in the graph.")
+    return
   end
 
 
@@ -282,9 +283,9 @@ module annealing
      majority_cutoff::AbstractFloat=0.9)
 
     Δβ = (βₘₐₓ - βₘᵢₙ) / mcsteps
-    States = Array{Int}(length(g.vs), majority_steps)
+    States = SharedArray{Int}(length(g.vs), majority_steps)
 
-    @parallel for j in 1:majority_steps
+    @sync @parallel for j in 1:majority_steps
       β = βₘᵢₙ
       for vertex in g.vs
         vertex["fixed"] || (vertex["state"] = rand(0:7))
@@ -323,7 +324,7 @@ module annealing
     end
   end
 
-  function majority(g::Graph, States::Array{Int}, majority_cutoff::AbstractFloat, majority_steps::Int)
+  function majority(g::Graph, States, majority_cutoff::AbstractFloat, majority_steps::Int)
     state_counts = Array{Array{Float64},1}()
     for i in 1:length(g.vs)
       append!(state_counts, [counts(States[i,:], 0:7) ./ majority_steps])
@@ -369,11 +370,11 @@ module annealing
   gates is a list with the functions of the gates of the graph
   nbits are the number of bits of each gate
   """
-  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=nothing, gates=nothing, nbits::Int=3, solution::Bool=false, trials::Int=0)
+  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=Array{Int}(0), gates=nothing, nbits::Int=3, solution::Bool=false, trials::Int=0)
     # Number of possible states per gate
     nstates = 2^nbits
     # If no graph provided, create a new one
-    (g ≡ nothing) && (g = vertex_lattice(ds, gates, nbits, gm = gm)) || (gm = 1)
+    g ≡ nothing ? (g = vertex_lattice(ds, gates, nbits, gm = gm)) : gm = 1
     # gm = 1 for the return statement
     g.vs["state"] = -1
     # Chooses which way of checking is faster (from right to left or left to right)
@@ -410,10 +411,14 @@ module annealing
         if any((right_states[fixed_right, 2] - g.vs[end - ds[2] + fixed_right]["state"]) .≠ 0)
           continue
         else
-        print("Found double solution")
+        println("Found double solution")
           if trials < 10
             println("trying new random fixed states")
-            return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials + 1, solution=solution)
+            if gm == Array{Int}(0)
+              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials+1, solution=solution)
+            else
+              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials+1, solution=solution)
+            end
           else
             println("tried 10 times, still no solution")
             return
@@ -451,10 +456,14 @@ module annealing
         if (any((left_states[fixed_left, 2] - g.vs[fixed_left]["state"]) .≠ 0))
           continue
         else
-        print("Found double solution")
+        println("Found double solution")
           if(trials < 10)
             println("trying new random fixed states")
-            return unique_solution(ds, fixed_left, fixed_right, g=g, trials = trials + 1, solution=solution)
+            if gm == Array{Int}(0)
+              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials+1, solution=solution)
+            else
+              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials+1, solution=solution)
+            end
           else
             println("tried 10 times, still no solution")
             return
@@ -465,7 +474,7 @@ module annealing
     # If no graph, nor gatemap was provided, then the gatemap
     # produced in the function is passed.
     # Returned are only the states of the fixed gates.
-    if gm ≡ nothing
+    if gm == Array{Int}(0)
       if solution
         return (left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["gate"][:], sol)
       else
@@ -479,6 +488,5 @@ module annealing
       end
     end
   end
-
   end
 #################################################################################################################################################################
