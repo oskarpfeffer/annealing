@@ -278,26 +278,28 @@ module annealing
 
 
   function anneal!(g::Graph, ds::Array{Int};
-     mcsteps::Int=1000, βₘᵢₙ::AbstractFloat=0.,
-     βₘₐₓ::AbstractFloat=4., majority_steps::Int=100,
-     majority_cutoff::AbstractFloat=0.9)
+     mcsteps::Int=1000, βmin::AbstractFloat=2.5,
+     βmax::AbstractFloat=5.5, majority_steps::Int=100,
+     majority_cutoff::AbstractFloat=0.8, totalsteps::Int=5)
 
-    Δβ = (βₘₐₓ - βₘᵢₙ) / mcsteps
+    Δβ = (βmax - βmin) / mcsteps
     States = SharedArray{Int}(length(g.vs), majority_steps)
-
-    @sync @parallel for j in 1:majority_steps
-      β = βₘᵢₙ
-      for vertex in g.vs
-        vertex["fixed"] || (vertex["state"] = rand(0:7))
+    state_counts = Array{Array,1}(totalsteps)
+    for step in 1:totalsteps
+      @sync @parallel for j in 1:majority_steps
+        β = βmin
+        for vertex in g.vs
+          vertex["fixed"] || (vertex["state"] = rand(0:7))
+        end
+        for i in 1:mcsteps
+          montecarlo!(g, β)
+          β += Δβ
+        end
+        States[:,j] = g.vs["state"]
       end
-      for i in 1:mcsteps
-        montecarlo!(g, β)
-        β += Δβ
-      end
-      States[:,j] = g.vs["state"]
+      majority_steps > 1 && (state_counts[step] = majority(g, States, majority_cutoff, majority_steps))
     end
-    majority_steps > 1 && (return majority(g, States, majority_cutoff, majority_steps))
-    return
+    return state_counts
   end
 
 
