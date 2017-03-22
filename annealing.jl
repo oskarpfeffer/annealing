@@ -287,23 +287,27 @@ module annealing
   function anneal!(g::Graph, ds::Array{Int};
      mcsteps::Int=2^5, βmin::AbstractFloat=2.5,
      βmax::AbstractFloat=5.5, majority_steps::Int=1000,
-     majority_cutoff::AbstractFloat=0.75, totalsteps::Int=1)
+     majority_cutoff::AbstractFloat=0.75, totalsteps::Int=1, calc_energy::Bool=false, fixstates::Bool=true, do_majority::Bool=true)
 
     Δβ = (βmax - βmin) / mcsteps
-    States = SharedArray{Int}(length(g.vs), majority_steps)
-    state_counts = Array{Array,1}(totalsteps)
+    do_majority && (States = SharedArray{Int}(length(g.vs), majority_steps))
+    do_majority && (state_counts = Array{Array,1}(totalsteps))
+    calc_energy && (energy= SharedArray{Float64}(majority_steps, totalsteps))
     for step in 1:totalsteps
       @sync @parallel for j in 1:majority_steps
         β = βmin
         for vertex in g.vs
           vertex["fixed"] || (vertex["state"] = rand(0:7))
         end
-        montecarlo!(g, β, mcsteps, Δβ)
-        States[:,j] = g.vs["state"]
+        statemap = montecarlo!(g, β, mcsteps, Δβ)
+        do_majority && (States[:,j] = statemap)
+        calc_energy && (energy[j,step] = totalunfits(g, statemap))
       end
-      majority_steps > 1 && (state_counts[step] = majority(g, States, majority_cutoff, majority_steps))
+      do_majority && (majority_steps > 1 && (state_counts[step] = majority(g, States, majority_cutoff, majority_steps, fixstates)))
     end
-    return state_counts
+    calc_energy && do_majority && (return state_counts, energy)
+    calc_energy && (return energy)
+    do_majority && (return state_counts)
   end
 
 
@@ -331,31 +335,32 @@ module annealing
       end
       β += Δβ
     end
-    g.vs["state"] = statemap
+    statemap
   end
 
-  function majority(g::Graph, States, majority_cutoff::AbstractFloat, majority_steps::Int)
+  function majority(g::Graph, States, majority_cutoff::AbstractFloat, majority_steps::Int, fixstates::Bool)
     state_counts = Array{Array{Float64},1}()
     for i in 1:length(g.vs)
       append!(state_counts, [counts(States[i,:], 0:7) ./ majority_steps])
       for (j, state_count) in enumerate(state_counts[i])
         if state_count ≥ majority_cutoff
           g.vs[i]["state"] = j-1
-          g.vs[i]["fixed"] = true
+          fixstates && (g.vs[i]["fixed"] = true)
         end
       end
     end
     return state_counts
   end
 
-  function totalunfits(g::Graph)
-    energy = 0
+  function totalunfits(g::Graph, statemap::Array{Int}=Array{Int}(0))
+    isempty(statemap) && (statemap = g.vs["state"])
+    energy = 0.
     for vertex in g.vs
-      neighbor_vertices_index = neighbors(g,vertex,false, true )
+      neighbor_vertices_index = neighbors(g,vertex,false, true)
       for neighbor_vertex_index in neighbor_vertices_index
         neighbor_vertex = g.vs[neighbor_vertex_index]
         edge = g.es[get_eid(g, vertex.index, neighbor_vertex.index)[1]]
-        energy += compute_energy(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], vertex["state"], neighbor_vertex["state"])
+        energy += compute_energy(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], statemap[vertex.index], statemap[neighbor_vertex_index])
       end
     end
     energy
