@@ -203,9 +203,9 @@ module Graphslib
     return indices
   end
   function get_eid(g::Graph, source::Int, target::Int)
-    for edge in g.es
-      if ((edge.source == source && edge.target == target) || (edge.source == target && edge.target == source) )
-        return edge.index
+    for edge in g.vs[source].edges
+      if (g.es[edge].target == target || g.es[edge].source == target)
+        return edge
       end
     end
   end
