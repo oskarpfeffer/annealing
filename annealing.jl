@@ -209,10 +209,6 @@ module annealing
 
   function compute_energydiff(gate::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int, state1new::Int, source::Bool)
     energy = 0.
-    # for i in 1:length(bits1)
-    #   energy -= (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
-    #   energy += (bin(gate1(state1new), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
-    # end
     if source
       for i in 1:length(bits1)
         energy -= ((gate(state1)    & 2^(bits1[i]-1)) >> (bits1[i]-1)) $ (state2 & 2^(bits2[i]-1)) >> (bits2[i]-1)
@@ -232,14 +228,6 @@ module annealing
       energy -= (((state1)    & 2^(bits1[i]-1)) >> (bits1[i]-1)) $ (state2 & 2^(bits2[i]-1)) >> (bits2[i]-1)
       energy += (((state1) & 2^(bits1[i]-1)) >> (bits1[i]-1)) $ (state1new & 2^(bits2[i]-1)) >> (bits2[i]-1)
     end
-    # for i in 1:length(bits1)
-    #   energy -= (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
-    #   energy += (bin(gate1(state1new), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
-    # end
-    # for i in 1:length(bits1)
-    #   energy -= (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state2, 3)[end + 1 - bits2[i]])
-    #   energy += (bin(gate1(state1), 3)[end + 1 - bits1[i]] ≠ bin(state1new, 3)[end + 1 - bits2[i]])
-    # end
     energy
   end
 
@@ -297,9 +285,9 @@ module annealing
 
 
   function anneal!(g::Graph, ds::Array{Int};
-     mcsteps::Int=1000, βmin::AbstractFloat=2.5,
-     βmax::AbstractFloat=5.5, majority_steps::Int=100,
-     majority_cutoff::AbstractFloat=0.8, totalsteps::Int=5)
+     mcsteps::Int=2^5, βmin::AbstractFloat=2.5,
+     βmax::AbstractFloat=5.5, majority_steps::Int=1000,
+     majority_cutoff::AbstractFloat=0.75, totalsteps::Int=1)
 
     Δβ = (βmax - βmin) / mcsteps
     States = SharedArray{Int}(length(g.vs), majority_steps)
@@ -310,10 +298,7 @@ module annealing
         for vertex in g.vs
           vertex["fixed"] || (vertex["state"] = rand(0:7))
         end
-        for i in 1:mcsteps
-          montecarlo!(g, β, mcsteps, Δβ)
-          β += Δβ
-        end
+        montecarlo!(g, β, mcsteps, Δβ)
         States[:,j] = g.vs["state"]
       end
       majority_steps > 1 && (state_counts[step] = majority(g, States, majority_cutoff, majority_steps))
@@ -339,7 +324,7 @@ module annealing
           if g.es[edge].source == vertex
             ΔE += compute_energydiff(gmap[vertex], bitsmap[edge][1], bitsmap[edge][2], statemap[vertex], statemap[neighbor_vertex], newstate, true)
           else
-            ΔE += compute_energydiff(gmap[neighbor_vertex], [bitsmap[edge][1]], bitsmap[edge][2], statemap[neighbor_vertex], statemap[vertex], newstate, false)
+            ΔE += compute_energydiff(gmap[neighbor_vertex], bitsmap[edge][1], bitsmap[edge][2], statemap[neighbor_vertex], statemap[vertex], newstate, false)
           end
         end
         (rand() < exp(- β * ΔE)) && (statemap[vertex] = newstate)
@@ -347,27 +332,6 @@ module annealing
       β += Δβ
     end
     g.vs["state"] = statemap
-    # for i in 1:mcsteps
-    #   for i in 1:length(g.vs)
-    #     vertex = g.vs[rand(1:length(g.vs))]
-    #     vertex["fixed"] && continue
-    #     newstate = rand(0:7)
-    #     newstate == vertex["state"] && continue
-    #     neighbor_vertices_index = neighbors(g, vertex)
-    #     ΔE = 0.
-    #     for neighbor_vertex_index in neighbor_vertices_index
-    #       neighbor_vertex = g.vs[neighbor_vertex_index]
-    #       edge = g.es[get_eid(g, vertex.index, neighbor_vertex.index)[1]]
-    #       if edge.source == vertex.index
-    #         ΔE += compute_energydiff(vertex["gate"], neighbor_vertex["gate"], edge["bits"][1], edge["bits"][2], vertex["state"], neighbor_vertex["state"], newstate, edge.source == vertex.index)
-    #       else
-    #         ΔE += compute_energydiff(neighbor_vertex["gate"],vertex["gate"], edge["bits"][1], edge["bits"][2], neighbor_vertex["state"], vertex["state"], newstate,  edge.source == vertex.index)
-    #       end
-    #     end
-    #     (rand() < exp(- β * ΔE)) && (vertex["state"] = newstate)
-    #   end
-    #   β += Δβ
-    # end
   end
 
   function majority(g::Graph, States, majority_cutoff::AbstractFloat, majority_steps::Int)
