@@ -168,7 +168,7 @@ module annealing
     return g
   end
 
-  function vertex_lattice(ds::Array{Int}, gates::Array, nbits; gm::Array{Int}=Array{Int}(0), st::Array{Int}=Array{Int}(0), ps::Array{AbstractFloat}=Array{AbstractFloat}(0))
+  function vertex_lattice(ds::Array{Int}, gates::Array, nbits; gm::Array{Int}=Array{Int}(0), st::Array{Int}=Array{Int}(0), ps::Array=Array{AbstractFloat}(0))
 
     if typeof(nbits) ≡ Int
       nbits = nbits * ones(Int, length(gates))
@@ -313,12 +313,12 @@ module annealing
 
   function montecarlo!(g::Graph, β::Float64, mcsteps::Int, Δβ::Float64)
     gmap = g.vs["gate"]; bitsmap = g.es["bits"]
-    statemap = g.vs["state"]; fixedmap = g.vs["fixed"]
+    statemap = g.vs["state"]#; fixedmap = g.vs["fixed"]
     ngates = length(g.vs)
     for i in 1:mcsteps
       for i in 1:ngates
         vertex = rand(1:ngates)
-        fixedmap[vertex] && continue
+        #fixedmap[vertex] && continue
         newstate = rand(0:7)
         newstate == statemap[vertex] && continue
         neighbor_vertices_index = neighbors(g, vertex)
@@ -502,6 +502,26 @@ module annealing
         return (left_states[fixed_left, 2], right_states[fixed_right, 2])
       end
     end
+  end
+
+  function energymeasure(g,fname, βmin::Float64, βmax::Float64, decades::Int, bins::Int, ds, gates, ps)
+
+    energy= SharedArray{Float64}(bins, decades)
+    for decade in 1:decades
+      Δβ = (βmax - βmin) / 2^decade
+      @sync @parallel for j in 1:bins
+        g = vertex_lattice(ds,gates, 3, ps=[2.,2.,2.,2.,2.])
+        println(g.vs[1:3]["gate"])
+        g.vs["state"] = rand(0:7,length(g.vs))
+        β = βmin
+        statemap = montecarlo!(g, β, 2^decade, Δβ)
+        energy[j,decade] = totalunfits(g, statemap)
+      end
+    end
+    open(fname,"w") do f
+      writedlm(f,energy)
+    end
+    return energy
   end
   end
 #################################################################################################################################################################
