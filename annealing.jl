@@ -7,7 +7,7 @@ module annealing
   push!(LOAD_PATH, pwd())
   using Graphslib
   import StatsBase.counts
-  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution
+  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure
 
   # Faster and nicer definition for AND and OR
   ∧(A::Bool, B::Bool) = A && B
@@ -289,17 +289,17 @@ module annealing
      βmax::AbstractFloat=5.5, majority_steps::Int=1000,
      majority_cutoff::AbstractFloat=0.75, totalsteps::Int=1, calc_energy::Bool=false, fixstates::Bool=true, do_majority::Bool=true)
 
-    Δβ = (βmax - βmin) / mcsteps
+    #Δβ = (βmax - βmin) / mcsteps
     do_majority && (States = SharedArray{Int}(length(g.vs), majority_steps))
     do_majority && (state_counts = Array{Array,1}(totalsteps))
     calc_energy && (energy= SharedArray{Float64}(majority_steps, totalsteps))
     for step in 1:totalsteps
       @sync @parallel for j in 1:majority_steps
-        β = βmin
+        #β = βmin
         for vertex in g.vs
           vertex["fixed"] || (vertex["state"] = rand(0:7))
         end
-        statemap = montecarlo!(g, β, mcsteps, Δβ)
+        statemap = montecarlo!(g, mcsteps)
         do_majority && (States[:,j] = statemap)
         calc_energy && (energy[j,step] = totalunfits(g, statemap))
       end
@@ -311,11 +311,12 @@ module annealing
   end
 
 
-  function montecarlo!(g::Graph, β::Float64, mcsteps::Int, Δβ::Float64)
+  function montecarlo!(g::Graph, mcsteps::Int)
     gmap = g.vs["gate"]; bitsmap = g.es["bits"]
     statemap = g.vs["state"]#; fixedmap = g.vs["fixed"]
     ngates = length(g.vs)
-    for i in 1:mcsteps
+    for t in 1:mcsteps
+      β = 1/(1-t/(mcsteps+1))
       for i in 1:ngates
         vertex = rand(1:ngates)
         #fixedmap[vertex] && continue
@@ -333,7 +334,6 @@ module annealing
         end
         (rand() < exp(- β * ΔE)) && (statemap[vertex] = newstate)
       end
-      β += Δβ
     end
     statemap
   end
@@ -504,17 +504,13 @@ module annealing
     end
   end
 
-  function energymeasure(g,fname, βmin::Float64, βmax::Float64, decades::Int, bins::Int, ds, gates, ps)
-
+  function energymeasure(fname, decades::Int, bins::Int, ds, gates, ps)
     energy= SharedArray{Float64}(bins, decades)
     for decade in 1:decades
-      Δβ = (βmax - βmin) / 2^decade
       @sync @parallel for j in 1:bins
         g = vertex_lattice(ds,gates, 3, ps=[2.,2.,2.,2.,2.])
-        println(g.vs[1:3]["gate"])
         g.vs["state"] = rand(0:7,length(g.vs))
-        β = βmin
-        statemap = montecarlo!(g, β, 2^decade, Δβ)
+        statemap = montecarlo!(g, 2^decade)
         energy[j,decade] = totalunfits(g, statemap)
       end
     end
