@@ -285,17 +285,14 @@ module annealing
 
 
   function anneal!(g::Graph, ds::Array{Int};
-     mcsteps::Int=2^5, βmin::AbstractFloat=2.5,
-     βmax::AbstractFloat=5.5, majority_steps::Int=1000,
+     mcsteps::Int=2^5, majority_steps::Int=1000,
      majority_cutoff::AbstractFloat=0.75, totalsteps::Int=1, calc_energy::Bool=false, fixstates::Bool=true, do_majority::Bool=true)
 
-    #Δβ = (βmax - βmin) / mcsteps
     do_majority && (States = SharedArray{Int}(length(g.vs), majority_steps))
     do_majority && (state_counts = Array{Array,1}(totalsteps))
     calc_energy && (energy= SharedArray{Float64}(majority_steps, totalsteps))
     for step in 1:totalsteps
       @sync @parallel for j in 1:majority_steps
-        #β = βmin
         for vertex in g.vs
           vertex["fixed"] || (vertex["state"] = rand(0:7))
         end
@@ -313,13 +310,13 @@ module annealing
 
   function montecarlo!(g::Graph, mcsteps::Int)
     gmap = g.vs["gate"]; bitsmap = g.es["bits"]
-    statemap = g.vs["state"]#; fixedmap = g.vs["fixed"]
+    statemap = g.vs["state"]; fixedmap = g.vs["fixed"]
     ngates = length(g.vs)
     for t in 1:mcsteps
       β = 1/(1-t/(mcsteps+1))
       for i in 1:ngates
         vertex = rand(1:ngates)
-        #fixedmap[vertex] && continue
+        fixedmap[vertex] && continue
         newstate = rand(0:7)
         newstate == statemap[vertex] && continue
         neighbor_vertices_index = neighbors(g, vertex)
@@ -508,7 +505,7 @@ module annealing
     energy= SharedArray{Float64}(bins, decades)
     for decade in 1:decades
       @sync @parallel for j in 1:bins
-        g = vertex_lattice(ds,gates, 3, ps=[2.,2.,2.,2.,2.])
+        g = vertex_lattice(ds,gates, 3, ps)
         g.vs["state"] = rand(0:7,length(g.vs))
         statemap = montecarlo!(g, 2^decade)
         energy[j,decade] = totalunfits(g, statemap)
@@ -519,5 +516,19 @@ module annealing
     end
     return energy
   end
+  function statecounts(fname, decades::Int, ds, gates, ps,totalsteps,majority_steps, fixed_left, fixed_right)
+    g = vertex_lattice(ds,gates, 3, ps = ps)
+    left_states = hcat(1:length(fixed_left), zeros(Int, length(fixed_left)))
+    right_states = hcat(1:length(fixed_right), zeros(Int, length(fixed_right)))
+    left_states[:,2], right_states[:,2], g.vs["gate"], solution =unique_solution(ds, fixed_left, fixed_right,  solution=true,gates = gates, trials = -100)
+    init_annealing!(g, ds, left_states, right_states)
+    state_counts, energy = anneal!(g, ds; mcsteps=2^decades, majority_steps=10, majority_cutoff=0.75,
+    totalsteps=totalsteps, calc_energy=true, fixstates=true, do_majority=true)
+    energy /= prod(ds)
+    open(fname * ".txt","w") do f
+      writedlm(f, energy)
+    end
+    save(fname * ".jld", "state_counts", state_counts, "gatemap", g.vs["type"], "solution", solution, "ds", ds)
   end
-#################################################################################################################################################################
+  end
+###################################################################################################################
