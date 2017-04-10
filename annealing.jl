@@ -7,7 +7,7 @@ module annealing
   push!(LOAD_PATH, pwd())
   using Graphslib
   import StatsBase.counts
-  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure
+  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts
 
   # Faster and nicer definition for AND and OR
   ∧(A::Bool, B::Bool) = A && B
