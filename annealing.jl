@@ -6,6 +6,7 @@
 module annealing
   push!(LOAD_PATH, pwd())
   using Graphslib
+  using JLD
   import StatsBase.counts
   export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts
 
@@ -522,13 +523,13 @@ module annealing
     right_states = hcat(1:length(fixed_right), zeros(Int, length(fixed_right)))
     left_states[:,2], right_states[:,2], g.vs["gate"], solution =unique_solution(ds, fixed_left, fixed_right,  solution=true,gates = gates, trials = -100)
     init_annealing!(g, ds, left_states, right_states)
-    state_counts, energy = anneal!(g, ds; mcsteps=2^decades, majority_steps=10, majority_cutoff=0.75,
+    state_counts, energy = anneal!(g, ds; mcsteps=2^decades, majority_steps=majority_steps, majority_cutoff=0.75,
     totalsteps=totalsteps, calc_energy=true, fixstates=true, do_majority=true)
     energy /= prod(ds)
     open(fname * ".txt","w") do f
       writedlm(f, energy)
     end
-    save(fname * ".jld", "state_counts", state_counts, "gatemap", g.vs["type"], "solution", solution, "ds", ds)
+    save(fname * ".jld", "state_counts", state_counts, "gatemap", g.vs["type"], "solution", solution, "ds", ds, "fixed", g.vs["fixed"])
   end
   end
 ###################################################################################################################
