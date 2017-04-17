@@ -22,10 +22,12 @@ Arguments for Graph:
   get_eid
   remove_edges!
   remove_vertices!
+  edgelist
+  edgeconnection
 """
 module Graphslib
 
-  export Graph, Edge, Vertex, newgraph, neighbors, add_vertices!, add_edges!, get_eid, remove_edges!, remove_vertices!
+  export Graph, Edge, Vertex, newgraph, neighbors, add_vertices!, add_edges!, get_eid, remove_edges!, remove_vertices!, edgelist, edgeconnection
   import Base.setindex!
   import Base.getindex
 
@@ -311,4 +313,46 @@ module Graphslib
     remove_vertices!(g, to_remove)
   end
 
+  """Returns an array with the edges where the vertex is the source (if source is true) and
+  where it is the target (if targte is true) for each vertex. I.e. edgelist[1]
+  is the same as g.vs[1].edges, but as an array."""
+  function edgelist(g::Graph; source::Bool=true, target::Bool=true)
+    edgelist = Vector{Vector{Int}}(length(g.vs))
+    for vertex in g.vs
+      vertexedgelist = []
+      for edge_index in vertex.edges
+        if (target && (g.es[edge_index].target == vertex.index))
+          push!(vertexedgelist, edge_index)
+        end
+        if (source && (g.es[edge_index].source == vertex.index))
+          push!(vertexedgelist, edge_index)
+        end
+      end
+      edgelist[vertex.index] = vertexedgelist
+    end
+    return edgelist
+  end
+
+  """
+  Returns an array with the source (if source is true) and target (if target is true)
+  for each edge. (I.e. edgeconnection(g)[1] is [g.es[1].source, g.es[1].target])
+    """
+    function edgeconnection(g::Graph; source::Bool=true, target::Bool=true)
+      if source && target
+        edgeconnectionsmap = Vector{Vector{Int}}(length(g.es))
+        for edge in g.es
+          edgeconnectionlist = []
+          source && push!(edgeconnectionlist, edge.source)
+          target && push!(edgeconnectionlist, edge.target)
+          edgeconnectionsmap[edge.index] = edgeconnectionlist
+        end
+      else
+        edgeconnectionsmap = Vector{Int}(length(g.es))
+        for edge in g.es
+          source && (edgeconnectionsmap[edge.index] = edge.source)
+          target && (edgeconnectionsmap[edge.index] = edge.target)
+        end
+      end
+      return edgeconnectionsmap
+    end
 end
