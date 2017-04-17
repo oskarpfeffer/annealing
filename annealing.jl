@@ -8,7 +8,7 @@ module annealing
   using Graphslib
   using JLD
   import StatsBase.counts
-  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts
+  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, edgebitsmap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, solve_gategraph, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts
 
   # Faster and nicer definition for AND and OR
   ∧(A::Bool, B::Bool) = A && B
@@ -117,6 +117,21 @@ module annealing
     end
     return gm
   end
+
+  function edgebitsmap(g::Graph; input::Bool=true, output::Bool=true)
+    edgebitsoutmap = Vector{Vector{Int}}(length(g.es))
+    edgebitsinmap = Vector{Vector{Int}}(length(g.es))
+    for edge in g.es
+      edgebitsoutmap[edge.index] = edge["bits"][1]
+    end
+    for edge in g.es
+      edgebitsinmap[edge.index] = edge["bits"][2]
+    end
+    (input && output) && return (edgebitsinmap, edgebitsoutmap)
+    input && return edgebitsinmap
+    output && return edgebitsoutmap
+  end
+
 
   function vertex_lattice_gategraph(ds::Array{Int})
     """
@@ -233,31 +248,43 @@ module annealing
   end
 
   function solve_gategraph!(g::Graph)
-    for vertex in g.vs
-      vertex["state"] ≠ -1 && continue
-      neighbors_index = neighbors(g, vertex, true, false)
-      isempty(neighbors_index) && continue
-      -1 in g.vs[neighbors_index]["state"] && continue
-      gatebits = Array{String}(vertex["nbits"])
-      for neighbor in g.vs[neighbors_index]
-        edge_index = get_eid(g, neighbor.index, vertex.index)
-        gatebits[g.es[edge_index]["bits"][2]] = split(bits(neighbor["gate"](neighbor["state"]))[end+1-g.es[edge_index]["bits"][1]], "")
+    statemap = g.vs["state"]
+    gatemap = g.vs["gate"]
+    edgelistout = edgelist(g, target=false)
+    edgelistin = edgelist(g, source=false)
+    edgesourcemap = edgeconnection(g, target=false)
+    edgetargetmap = edgeconnection(g, source=false)
+    (edgebitsinmap, edgebitsoutmap) = edgebitsmap(g, input=true, output=true)
+    g.vs["state"] = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
+  end
+
+
+  function solve_gategraph(g::Graph; forward::Bool=true, backward::Bool=true, statemap::Vector{Int}=nothing, gatemap=nothing, edgelistin=nothing, edgelistout=nothing, edgesourcemap=nothing, edgetargetmap=nothing, edgebitsinmap=nothing, edgebitsoutmap=nothing)
+    ngates = length(statemap)
+    if forward
+      for vertex in 1:ngates
+        statemap[vertex] ≠ -1 && continue
+        isempty(edgelistin[vertex]) && continue
+        -1 in [statemap[x] for x in edgesourcemap[edgelistin[vertex]]] && continue
+        statemap[vertex] = 0
+        for edge in edgelistin[vertex]
+          statemap[vertex] += sum(gatemap[edgesourcemap[edge]](statemap[edgesourcemap[edge]]) & 2 .^ (edgebitsoutmap[edge] .- 1) .<< (edgebitsinmap[edge] .- edgebitsoutmap[edge]))
+        end
       end
-      vertex["state"] = parse(Int, join(gatebits[end:-1:1]),2)
     end
-    for vertex in g.vs[end:-1:1]
-      vertex["state"] ≠ -1 && continue
-      neighbors_index = neighbors(g, vertex, false, true)
-      isempty(neighbors_index) && continue
-      -1 in g.vs[neighbors_index]["state"] && continue
-      gatebits = Array{String}(vertex["nbits"])
-      for neighbor in g.vs[neighbors_index]
-        edge_index = get_eid(g, neighbor.index, vertex.index)[1]
-        gatebits[g.es[edge_index]["bits"][1]] = split(bits(neighbor["gate"](neighbor["state"]))[end+1-g.es[edge_index]["bits"][2]], "")
+    if backward
+      for vertex in ngates:-1:1
+        statemap[vertex] ≠ -1 && continue
+        isempty(edgelistout[vertex]) && continue
+        -1 in [statemap[x] for x in edgetargetmap[edgelistout[vertex]]] && continue
+        statemap[vertex] = 0
+        for edge in edgelistout[vertex]
+          statemap[vertex] += sum(statemap[edgetargetmap[edge]] & 2 .^ (edgebitsinmap[edge] .- 1) .<< (edgebitsoutmap[edge] .- edgebitsinmap[edge]))
+        end
+        statemap[vertex] = gatemap[vertex](statemap[vertex], true)
       end
-      vertex["state"] = parse(Int, join(gatebits[end:-1:1]),2)
     end
-    return g.vs["state"]
+    return statemap
   end
 
   function check_graph_solution(g::Graph)
@@ -383,102 +410,102 @@ module annealing
   gates is a list with the functions of the gates of the graph
   nbits are the number of bits of each gate
   """
-  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=Array{Int}(0), gates=nothing, nbits::Int=3, solution::Bool=false, trials::Int=0)
+  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=Array{Int}(0), gates=nothing, nbits::Int=3, solution::Bool=false, trials::Int=100)
     # Number of possible states per gate
     nstates = 2^nbits
     # If no graph provided, create a new one
     g ≡ nothing ? (g = vertex_lattice(ds, gates, nbits, gm = gm)) : gm = 1
     # gm = 1 for the return statement
-    g.vs["state"] = -1
+    statemap = g.vs["state"]
+    gatemap = g.vs["gate"]
+    edgelistout = edgelist(g, target=false)
+    edgelistin = edgelist(g, source=false)
+    edgesourcemap = edgeconnection(g, target=false)
+    edgetargetmap = edgeconnection(g, source=false)
+    (edgebitsinmap, edgebitsoutmap) = edgebitsmap(g, input=true, output=true)
+    statemap[:] = -1
     # Chooses which way of checking is faster (from right to left or left to right)
     if length(fixed_left) ≥ length(fixed_right)
-      g.vs[fixed_left]["state"] = rand(0:nstates-1, length(fixed_left))
+      statemap[fixed_left] = rand(0:nstates-1, length(fixed_left))
       not_fixed_left = Array{Int,1}()
       for i in 1:ds[2]
-        g.vs[i]["state"] == -1 && push!(not_fixed_left, i)
+        statemap[i] == -1 && push!(not_fixed_left, i)
       end
       unfixed = length(not_fixed_left)
 
       # left_states and right_states are 2d arrays with dimensions [2,ds[1]]
       # where the dimension [0,:] is the gate row_index and [1,:] the state
       left_states = hcat(1:ds[2], zeros(Int, ds[2]))
-      left_states[fixed_left, 2] = g.vs["state"][fixed_left]
-      g.vs[left_states[:,1]]["state"] = left_states[:,2]
-      sol = solve_gategraph!(g)
-      # Those right_states will be checked for uniqueness
-      right_states = hcat(1:ds[2], g.vs[end - ds[2] + 1:end]["state"])
+      left_states[fixed_left, 2] = statemap[fixed_left]
+      statemap[left_states[:,1]] = left_states[:,2]
+      sol = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)    # Those right_states will be checked for uniqueness
+      right_states = hcat(1:ds[2], sol[end - ds[2] + 1:end])
 
-      i = 1
-      while i < nstates^unfixed
-        i += 1
+      for i in 2:nstates^unfixed
         # pos iterates over the states of the unfixed gates i.e. [0,0,1] ..
         # [0,0,2]
         pos = idxtopos(i, ones(Int, unfixed) * nstates) .- 1
         left_states[not_fixed_left, 2] = pos
-        g.vs["state"] = -1
-        g.vs[left_states[:,1]]["state"] = left_states[:,2]
-        solve_gategraph!(g)
-
+        statemap[:] = -1
+        statemap[left_states[:,1]] = left_states[:,2]
+        statemap = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
         # saved right_states before the loop are compared to the current
         # ones
-        if any((right_states[fixed_right, 2] - g.vs[end - ds[2] + fixed_right]["state"]) .≠ 0)
+        if any((right_states[fixed_right, 2] - statemap[end - ds[2] + fixed_right]) .≠ 0)
           continue
         else
         println("Found double solution")
-          if trials < 10
+          if trials > 0
             println("trying new random fixed states")
             if gm == Array{Int}(0)
-              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials+1, solution=solution)
+              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials-1, solution=solution)
             else
-              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials+1, solution=solution)
+              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials-1, solution=solution)
             end
           else
-            println("tried 10 times, still no solution")
+            println("still no solution")
             return
           end
         end
       end
     else
-      g.vs[end - ds[2] + fixed_right]["state"] = rand(0:nstates, length(fixed_right))
+      statemap[end - ds[2] + fixed_right] = rand(0:nstates-1, length(fixed_right))
       not_fixed_right = Array{Int,1}()
       for i in 1:ds[2]
-        (g.vs[end-ds[2]+i]["state"] == -1) && push!(not_fixed_right, i)
+        (statemap[end-ds[2]+i] == -1) && push!(not_fixed_right, i)
       end
       unfixed = length(not_fixed_right)
 
       # left_states and right_states are 2d arrays with dimensions [2,ds[1]]
       # where the dimension [0,:] is the gate row_index and [1,:] the state
       right_states = hcat(1:ds[2], zeros(Int, ds[2]))
-      right_states[fixed_right, 2] = g.vs[end - ds[2] + 1 + fixed_right]["state"]
-      g.vs[end - ds[2] + right_states[:,1]]["state"] = right_states[:,2]
-      sol = solve_gategraph!(g)
-      # Those right_states will be checked for uniqueness
-      left_states = hcat(1:ds[2], g.vs[1:ds[2]]["state"])
+      right_states[fixed_right, 2] = statemap[end - ds[2]  + fixed_right]
+      statemap[end - ds[2] + right_states[:,1]] = right_states[:,2]
+      sol = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
+      # These left_states will be checked for uniqueness
+      left_states = hcat(1:ds[2], sol[1:ds[2]])
 
-      i = 1
-      while i < nstates^unfixed
-        i += 1
+      for i in 2:nstates^unfixed
         # pos iterates over the states of the unfixed gates i.e. [0,0,1] .. [0,0,2]
         pos = idxtopos(i, ones(Int, unfixed) * nstates) .- 1
         right_states[not_fixed_right, 2] = pos
-        g.vs["state"] = -1
-        g.vs[end - ds[2] + right_states[:,1]]["state"] = right_states[:,2]
-        solve_gategraph!(g)
-
-        # saved right_states before the loop are compared to the current ones
-        if (any((left_states[fixed_left, 2] - g.vs[fixed_left]["state"]) .≠ 0))
+        statemap[:] = -1
+        statemap[end - ds[2] + right_states[:,1]] = right_states[:,2]
+        statemap = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
+        # saved left_states before the loop are compared to the current ones
+        if (any((left_states[fixed_left, 2] - statemap[fixed_left]) .≠ 0))
           continue
         else
         println("Found double solution")
-          if(trials < 10)
+          if(trials >0)
             println("trying new random fixed states")
             if gm == Array{Int}(0)
-              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials+1, solution=solution)
+              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials-1, solution=solution)
             else
-              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials+1, solution=solution)
+              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials-1, solution=solution)
             end
           else
-            println("tried 10 times, still no solution")
+            println("still no solution")
             return
           end
         end
@@ -489,9 +516,9 @@ module annealing
     # Returned are only the states of the fixed gates.
     if gm == Array{Int}(0)
       if solution
-        return (left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["gate"][:], sol)
+        return (left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["type"][:], sol)
       else
-        return (left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["gate"][:])
+        return (left_states[fixed_left, 2], right_states[fixed_right, 2], g.vs["type"][:])
       end
     else
       if solution
