@@ -438,17 +438,23 @@ module annealing
       left_states = hcat(1:ds[2], zeros(Int, ds[2]))
       left_states[fixed_left, 2] = statemap[fixed_left]
       statemap[left_states[:,1]] = left_states[:,2]
-      sol = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)    # Those right_states will be checked for uniqueness
+      initstate = rand(1:nstates^unfixed)
+      pos = idxtopos(initstate, ones(Int, unfixed) * nstates) .- 1
+      left_states[not_fixed_left, 2] = pos
+      statemap[:] = -1
+      statemap[left_states[:,1]] = left_states[:,2]
+      sol = solve_gategraph(g,statemap=copy(statemap), gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)    # Those right_states will be checked for uniqueness
       right_states = hcat(1:ds[2], sol[end - ds[2] + 1:end])
 
-      for i in 2:nstates^unfixed
+      for i in 1:nstates^unfixed
         # pos iterates over the states of the unfixed gates i.e. [0,0,1] ..
         # [0,0,2]
+        i == initstate && continue
         pos = idxtopos(i, ones(Int, unfixed) * nstates) .- 1
         left_states[not_fixed_left, 2] = pos
         statemap[:] = -1
         statemap[left_states[:,1]] = left_states[:,2]
-        statemap = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
+        solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
         # saved right_states before the loop are compared to the current
         # ones
         if any((right_states[fixed_right, 2] - statemap[end - ds[2] + fixed_right]) .≠ 0)
@@ -481,17 +487,23 @@ module annealing
       right_states = hcat(1:ds[2], zeros(Int, ds[2]))
       right_states[fixed_right, 2] = statemap[end - ds[2]  + fixed_right]
       statemap[end - ds[2] + right_states[:,1]] = right_states[:,2]
-      sol = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
+      initstate = rand(1:nstates^unfixed)
+      pos = idxtopos(initstate, ones(Int, unfixed) * nstates) .- 1
+      right_states[not_fixed_right, 2] = pos
+      statemap[:] = -1
+      statemap[end - ds[2] + right_states[:,1]] = right_states[:,2]
+      sol = solve_gategraph(g,statemap=copy(statemap), gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
       # These left_states will be checked for uniqueness
       left_states = hcat(1:ds[2], sol[1:ds[2]])
 
-      for i in 2:nstates^unfixed
+      for i in 1:nstates^unfixed
         # pos iterates over the states of the unfixed gates i.e. [0,0,1] .. [0,0,2]
+        i == initstate && continue
         pos = idxtopos(i, ones(Int, unfixed) * nstates) .- 1
         right_states[not_fixed_right, 2] = pos
         statemap[:] = -1
         statemap[end - ds[2] + right_states[:,1]] = right_states[:,2]
-        statemap = solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
+        solve_gategraph(g,statemap=statemap, gatemap=gatemap, edgelistin=edgelistin, edgelistout=edgelistout, edgesourcemap=edgesourcemap, edgetargetmap=edgetargetmap, edgebitsinmap=edgebitsinmap, edgebitsoutmap=edgebitsoutmap)
         # saved left_states before the loop are compared to the current ones
         if (any((left_states[fixed_left, 2] - statemap[fixed_left]) .≠ 0))
           continue
