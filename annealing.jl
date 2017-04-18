@@ -410,11 +410,11 @@ module annealing
   gates is a list with the functions of the gates of the graph
   nbits are the number of bits of each gate
   """
-  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=Array{Int}(0), gates=nothing, nbits::Int=3, solution::Bool=false, trials::Int=100)
+  function unique_solution(ds::Array{Int}, fixed_left::Array{Int}, fixed_right::Array{Int}; g=nothing, gm=Array{Int}(0), gates=nothing,ps=[1,1,1,1,1], nbits::Int=3, solution::Bool=false, trials::Int=100)
     # Number of possible states per gate
     nstates = 2^nbits
     # If no graph provided, create a new one
-    g ≡ nothing ? (g = vertex_lattice(ds, gates, nbits, gm = gm)) : gm = 1
+    g ≡ nothing ? (g = vertex_lattice(ds, gates, nbits, gm=gm, ps=ps)) : gm = 1
     # gm = 1 for the return statement
     statemap = g.vs["state"]
     gatemap = g.vs["gate"]
@@ -464,9 +464,9 @@ module annealing
           if trials > 0
             println("trying new random fixed states")
             if gm == Array{Int}(0)
-              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials-1, solution=solution)
+              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials-1, solution=solution, ps=ps)
             else
-              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials-1, solution=solution)
+              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials-1, solution=solution, ps=ps)
             end
           else
             println("still no solution")
@@ -512,9 +512,9 @@ module annealing
           if(trials >0)
             println("trying new random fixed states")
             if gm == Array{Int}(0)
-              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials-1, solution=solution)
+              return unique_solution(ds, fixed_left, fixed_right, gates=gates, trials=trials-1, solution=solution, ps=ps)
             else
-              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials-1, solution=solution)
+              return unique_solution(ds, fixed_left, fixed_right, g=g, trials=trials-1, solution=solution, ps=ps)
             end
           else
             println("still no solution")
@@ -557,10 +557,10 @@ module annealing
     return energy
   end
   function statecounts(fname, decades::Int, ds, gates, ps,totalsteps,majority_steps, fixed_left, fixed_right)
-    g = vertex_lattice(ds,gates, 3, ps = ps)
-    left_states = hcat(1:length(fixed_left), zeros(Int, length(fixed_left)))
-    right_states = hcat(1:length(fixed_right), zeros(Int, length(fixed_right)))
-    left_states[:,2], right_states[:,2], g.vs["gate"], solution =unique_solution(ds, fixed_left, fixed_right,  solution=true,gates = gates, trials = -100)
+    left_states = hcat(fixed_left, zeros(Int, length(fixed_left)))
+    right_states = hcat(fixed_right, zeros(Int, length(fixed_right)))
+    left_states[:,2], right_states[:,2], typ, solution =unique_solution(ds, fixed_left, fixed_right,  solution=true,gates = gates,ps=ps, trials = 100)
+    g = vertex_lattice(ds,gates, 3, gm=typ)
     init_annealing!(g, ds, left_states, right_states)
     state_counts, energy = anneal!(g, ds; mcsteps=2^decades, majority_steps=majority_steps, majority_cutoff=0.75,
     totalsteps=totalsteps, calc_energy=true, fixstates=true, do_majority=true)
