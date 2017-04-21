@@ -570,5 +570,17 @@ module annealing
     end
     save(fname * ".jld", "state_counts", state_counts, "gatemap", g.vs["type"], "solution", solution, "ds", ds, "fixed", g.vs["fixed"])
   end
+
+  function get_uniquesolutions(ds, fixed_left, fixed_right; gates=[idid, toff, swsw, swid, idsw], ps=[1,1,1,1,1], num_graphs=10, fname=nothing, append_fname=false)
+    left_states = hcat(fixed_left, zeros(Int, length(fixed_left)))
+    right_states = hcat(fixed_right, zeros(Int, length(fixed_right)))
+    (fname == nothing) && (fname = "unique_solution_graph_$(ds[1])x$(ds[2])_fl$(length(fixed_left))_fr$(length(fixed_right))")
+    (typeof(fname) == Int) && (fname = "$fname" * "unique_solution_graph_$(ds[1])x$(ds[2])_fl$(length(fixed_left))_fr$(length(fixed_right))")
+    append_fname && (fname = fname * "unique_solution_graph_$(ds[1])x$(ds[2])_fl$(length(fixed_left))_fr$(length(fixed_right))")
+    for i in 1:num_graphs
+      left_states[:,2], right_states[:,2], gatetype, solution = unique_solution(ds, fixed_left, fixed_right, gates=gates, ps=ps, solution=true, trials=1000)
+      save(fname*"_$i.jld", "left_states", left_states, "right_states", right_states, "gatetype", gatetype, "solution", solution, "gates", gates)
+    end
+  end
   end
 ###################################################################################################################
