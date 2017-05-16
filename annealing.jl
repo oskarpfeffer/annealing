@@ -8,7 +8,7 @@ module annealing
   using Graphslib
   using JLD
   import StatsBase.counts
-  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, edgebitsmap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, solve_gategraph, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts
+  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, edgebitsmap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, solve_gategraph, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts, get_uniquesolutions
 
   # Faster and nicer definition for AND and OR
   ∧(A::Bool, B::Bool) = A && B
@@ -69,8 +69,8 @@ module annealing
   function idid(i::Int, reverse::Bool=false)  i end
   function swid(i::Int, reverse::Bool=false)
     i==2 && (return 4)
+    i==4 && (return 2)
     i==3 && (return 5)
-    i==4 && (return 6)
     i==5 && (return 3)
     return i
     #return swap(i, 2, 3)
@@ -117,7 +117,7 @@ module annealing
     end
     return gm
   end
-
+  """Returns the map of the inputbits and/or outputbits of the edges of the graph g."""
   function edgebitsmap(g::Graph; input::Bool=true, output::Bool=true)
     edgebitsoutmap = Vector{Vector{Int}}(length(g.es))
     edgebitsinmap = Vector{Vector{Int}}(length(g.es))
@@ -138,33 +138,25 @@ module annealing
     Returns an initialized graph with connected vertices for a 2-dimensional
     vertex lattice.
     """
-    ngates = prod(ds)
-    g = newgraph(ngates)
+    ngates = prod(ds); g = newgraph(ngates)
     g.vs["state"] = -1 * ones(Int, ngates)
-
     for i in 1:ngates
       pos = idxtopos(i,ds)
-      g.vs[i]["x"] = pos[1]
-      g.vs[i]["y"] = pos[2]
+      g.vs[i]["x"] = pos[1]; g.vs[i]["y"] = pos[2]
     end
-
     edge_index = 0
     for vertex1_index in 1: ngates - ds[2]
       pos = idxtopos(vertex1_index,ds)
       vertex2_index = postoidx(pos + [1,0], ds)
       add_edges!(g, vertex1_index, vertex2_index)
-
       edge_index += 1
-
       if mod(pos[1], 2) ≡ 1
         g.es[edge_index]["bits"] = [[3,2],[2,1]]
       else
         g.es[edge_index]["bits"] = [[1],[3]]
       end
-
       dy = (-1)^(mod(pos[1],2))
       y = pos[2] + dy
-
       if y ≡ ds[2]+1
         y=1
       elseif y ≡ 0
@@ -172,9 +164,7 @@ module annealing
       end
       vertex2_index = postoidx( [pos[1]+1, y], ds)
       add_edges!(g, vertex1_index, vertex2_index)
-
       edge_index += 1
-
       if mod(pos[1], 2) ≡ 1
         g.es[edge_index]["bits"] = [[1],[3]]
       else
@@ -185,7 +175,6 @@ module annealing
   end
 
   function vertex_lattice(ds::Array{Int}, gates::Array, nbits; gm::Array{Int}=Array{Int}(0), st::Array{Int}=Array{Int}(0), ps::Array=Array{AbstractFloat}(0))
-
     if typeof(nbits) ≡ Int
       nbits = nbits * ones(Int, length(gates))
     elseif length(nbits) ≠ length(gates)
@@ -195,7 +184,6 @@ module annealing
     elseif !isempty(ps) ∧ !isempty(gm)
       error("both ps and gm specified")
     end
-
     if !isempty(ps)
       gm = random_gatemap(ds, ps)
     elseif isempty(gm)
@@ -204,7 +192,6 @@ module annealing
       gm = random_gatemap(ds, ps)
     end
     g = vertex_lattice_gategraph(ds)
-
     g.vs["type"] = gm
     for i in 1:length(g.vs)
       g.vs[i]["gate"] = gates[g.vs[i]["type"]]
@@ -222,7 +209,12 @@ module annealing
     end
     energy
   end
-
+  """
+  Returns the energy difference for given bits, states and a new state for one vertex.
+  Only one gate is needed, if the state that will be changed is the source, the gate will be applied on that
+  since the state is always defined for the input.
+  Use source = true if the new state is at the source of the edge, otherwise use source = false.
+  """
   function compute_energydiff(gate::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int, state1new::Int, source::Bool)
     energy = 0.
     if source
@@ -238,6 +230,7 @@ module annealing
     end
     energy
   end
+
   function compute_energydifftarget(gate1::Function, gate2::Function, bits1::Array{Int}, bits2::Array{Int}, state1::Int, state2::Int, state1new::Int)
     energy = 0.
     for i in 1:length(bits1)
@@ -247,6 +240,7 @@ module annealing
     energy
   end
 
+  """This function tries to solve the vertex model graph as far as possible using direct computation of the gates."""
   function solve_gategraph!(g::Graph)
     statemap = g.vs["state"]
     gatemap = g.vs["gate"]
@@ -259,7 +253,7 @@ module annealing
   end
 
 
-  function solve_gategraph(g::Graph; forward::Bool=true, backward::Bool=true, statemap::Vector{Int}=nothing, gatemap=nothing, edgelistin=nothing, edgelistout=nothing, edgesourcemap=nothing, edgetargetmap=nothing, edgebitsinmap=nothing, edgebitsoutmap=nothing)
+  function solve_gategraph(g::Graph; forward::Bool=true, backward::Bool=true, statemap::Vector{Int}, gatemap, edgelistin, edgelistout, edgesourcemap, edgetargetmap, edgebitsinmap, edgebitsoutmap)
     ngates = length(statemap)
     if forward
       for vertex in 1:ngates
@@ -287,6 +281,7 @@ module annealing
     return statemap
   end
 
+  """ This function checks if there are mistakes in the connection between the edges of the graph."""
   function check_graph_solution(g::Graph)
     errnumber = 0
     for edge in g.es
@@ -300,7 +295,7 @@ module annealing
     return
   end
 
-
+  """ This function initialized the vertex model for the annealing protocol."""
   function init_annealing!(g::Graph, ds::Array{Int}, fixed_left::Array{Int}=Array{Int,2}(), fixed_right::Array{Int}=Array{Int,2}())
     g.vs[1 : end]["state"] = rand(0:7, length(g.vs["state"]))
     g.vs["fixed"] = false
@@ -311,9 +306,18 @@ module annealing
     return
   end
 
-
-  function anneal!(g::Graph, ds::Array{Int};
-     mcsteps::Int=2^5, majority_steps::Int=1000,
+  """
+  Annealing function
+    do_majority = true if state_counts should be returned and majority learning should be applied
+    fixstates = true if the majority algorithm should fix the states
+    calc_energy = true if the energy value of the system should be returned
+    totalsteps is the number of steps the system should learn
+    majority_steps is the number of replicas over which the system is averaged to get the majority states
+    majority_cutoff is the % of the state replicas needed to fix a state
+    mcsteps is the number of montecarlo steps for every annealing
+    """
+    function anneal!(g::Graph, ds::Array{Int};
+     mcsteps::Int=2^10, majority_steps::Int=500,
      majority_cutoff::AbstractFloat=0.75, totalsteps::Int=1, calc_energy::Bool=false, fixstates::Bool=true, do_majority::Bool=true)
 
     do_majority && (States = SharedArray{Int}(length(g.vs), majority_steps))
@@ -335,7 +339,7 @@ module annealing
     do_majority && (return state_counts)
   end
 
-
+  """Calculates one complete annealing from Temperature T = 1 to (almost) 0 in mcsteps montecarlo steps"""
   function montecarlo!(g::Graph, mcsteps::Int)
     gmap = g.vs["gate"]; bitsmap = g.es["bits"]
     statemap = g.vs["state"]; fixedmap = g.vs["fixed"]
@@ -541,11 +545,11 @@ module annealing
     end
   end
 
-  function energymeasure(fname, decades::Int, bins::Int, ds, gates, ps)
-    energy= SharedArray{Float64}(bins, decades)
-    for decade in 1:decades
+  function energymeasure(fname, startdecade=10::Int, enddecade::Int, bins::Int, ds, gates, ps)
+    energy = SharedArray{Float64}(bins, (enddecade - startdecade) + 1)
+    for decade in startdecade:enddecade
       @sync @parallel for j in 1:bins
-        g = vertex_lattice(ds,gates, 3, ps)
+        g = vertex_lattice(ds,gates, 3, ps=ps)
         g.vs["state"] = rand(0:7,length(g.vs))
         statemap = montecarlo!(g, 2^decade)
         energy[j,decade] = totalunfits(g, statemap)
@@ -556,6 +560,7 @@ module annealing
     end
     return energy
   end
+
   function statecounts(fname, decades::Int, ds, gates, ps,totalsteps,majority_steps, fixed_left, fixed_right)
     left_states = hcat(fixed_left, zeros(Int, length(fixed_left)))
     right_states = hcat(fixed_right, zeros(Int, length(fixed_right)))
@@ -571,15 +576,15 @@ module annealing
     save(fname * ".jld", "state_counts", state_counts, "gatemap", g.vs["type"], "solution", solution, "ds", ds, "fixed", g.vs["fixed"])
   end
 
-  function get_uniquesolutions(ds, fixed_left, fixed_right; gates=[idid, toff, swsw, swid, idsw], ps=[1,1,1,1,1], num_graphs=10, fname=nothing, append_fname=false)
+  function get_uniquesolutions(ds, fixed_left, fixed_right; gates=[idid, toff, swsw, swid, idsw], ps=[1,1,1,1,1], num_graphs=10, fname=nothing, append_fname=false, trials=1000)
     left_states = hcat(fixed_left, zeros(Int, length(fixed_left)))
     right_states = hcat(fixed_right, zeros(Int, length(fixed_right)))
     (fname == nothing) && (fname = "unique_solution_graph_$(ds[1])x$(ds[2])_fl$(length(fixed_left))_fr$(length(fixed_right))")
     (typeof(fname) == Int) && (fname = "$fname" * "unique_solution_graph_$(ds[1])x$(ds[2])_fl$(length(fixed_left))_fr$(length(fixed_right))")
     append_fname && (fname = fname * "unique_solution_graph_$(ds[1])x$(ds[2])_fl$(length(fixed_left))_fr$(length(fixed_right))")
     for i in 1:num_graphs
-      left_states[:,2], right_states[:,2], gatetype, solution = unique_solution(ds, fixed_left, fixed_right, gates=gates, ps=ps, solution=true, trials=1000)
-      save(fname*"_$i.jld", "left_states", left_states, "right_states", right_states, "gatetype", gatetype, "solution", solution, "gates", gates)
+      left_states[:,2], right_states[:,2], gatetype, solution = unique_solution(ds, fixed_left, fixed_right, gates=gates, ps=ps, solution=true, trials=trials)
+      save(fname*"_$i.jld", "left_states", left_states, "right_states", right_states, "gatetype", gatetype, "solution", solution)
     end
   end
   end
