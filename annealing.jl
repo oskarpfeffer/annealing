@@ -253,7 +253,7 @@ module annealing
   end
 
 
-  function solve_gategraph(g::Graph; forward::Bool=true, backward::Bool=true, statemap::Vector{Int}, gatemap, edgelistin, edgelistout, edgesourcemap, edgetargetmap, edgebitsinmap, edgebitsoutmap)
+  function solve_gategraph(g::Graph; forward::Bool=true, backward::Bool=true, statemap::Vector{Int}=Vector{Int}(), gatemap=nothing, edgelistin=nothing, edgelistout=nothing, edgesourcemap=nothing, edgetargetmap=nothing, edgebitsinmap=nothing, edgebitsoutmap=nothing)
     ngates = length(statemap)
     if forward
       for vertex in 1:ngates
