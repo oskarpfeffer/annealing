@@ -385,7 +385,7 @@ module annealing
     isempty(statemap) && (statemap = g.vs["state"])
     energy = 0.
     for vertex in g.vs
-      neighbor_vertices_index = neighbors(g,vertex,false, true)
+      neighbor_vertices_index = neighbors(g, vertex, source=false, target=true)
       for neighbor_vertex_index in neighbor_vertices_index
         neighbor_vertex = g.vs[neighbor_vertex_index]
         edge = g.es[get_eid(g, vertex.index, neighbor_vertex.index)[1]]
@@ -550,6 +550,7 @@ module annealing
     for decade in startdecade:enddecade
       @sync @parallel for j in 1:bins
         g = vertex_lattice(ds,gates, 3, ps=ps)
+        g.vs["fixed"] = false
         g.vs["state"] = rand(0:7,length(g.vs))
         statemap = montecarlo!(g, 2^decade)
         energy[j,decade] = totalunfits(g, statemap)
