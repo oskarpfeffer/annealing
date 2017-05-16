@@ -545,7 +545,7 @@ module annealing
     end
   end
 
-  function energymeasure(fname, startdecade=10::Int, enddecade::Int, bins::Int, ds, gates, ps)
+  function energymeasure(fname, startdecade::Int, enddecade::Int, bins::Int, ds, gates, ps)
     energy = SharedArray{Float64}(bins, (enddecade - startdecade) + 1)
     for decade in startdecade:enddecade
       @sync @parallel for j in 1:bins
