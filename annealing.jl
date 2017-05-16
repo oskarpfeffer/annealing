@@ -553,7 +553,7 @@ module annealing
         g.vs["fixed"] = false
         g.vs["state"] = rand(0:7,length(g.vs))
         statemap = montecarlo!(g, 2^decade)
-        energy[j,decade] = totalunfits(g, statemap)
+        energy[j,decade - startdecade + 1] = totalunfits(g, statemap)
       end
     end
     open(fname,"w") do f
