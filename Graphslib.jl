@@ -134,7 +134,7 @@ module Graphslib
   through a graph where they are the target.
   If both are true, it returns all the neighbors.
   """
-  function neighbors(g::Graph, vertex::Vertex, source::Bool=true, target::Bool=true)
+  function neighbors(g::Graph, vertex::Vertex; source::Bool=true, target::Bool=true)
     neighbors = Array(Int,0)
     for edge in vertex.edges
       if g.es[edge].source == vertex.index
@@ -150,8 +150,8 @@ module Graphslib
     return neighbors
   end
 
-  function neighbors(g::Graph, vertex::Int, source::Bool=true, target::Bool=true)
-    return neighbors(g, g.vs[vertex], source, target)
+  function neighbors(g::Graph, vertex::Int; source::Bool=true, target::Bool=true)
+    return neighbors(g, g.vs[vertex], source=source, target=target)
   end
 
   """
