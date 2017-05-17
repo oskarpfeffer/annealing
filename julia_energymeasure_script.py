@@ -24,7 +24,7 @@ for (j,PS) in enumerate(ps):
                     file.write("ds = [{}, {}]\n".format(W,L))
                     file.write("ps = "+PS+"\n")
                     file.write("energymeasure(\"compile.txt\", 1, 1, 1, ds, gates, ps)\n")
-                    file.write("@time energymeasure(\"dat/{}x{}_{}toff_20dec_{}replicas_{}.txt\", 10, 20, {}, ds, gates, ps)".format(W, L, percent[j], replicas[i], iteration, replicas[i]))
+                    file.write("@time energymeasure(\"dat/newdata/{}x{}_{}toff_20dec_{}replicas_{}.txt\", 10, 20, {}, ds, gates, ps)".format(W, L, percent[j], replicas[i], iteration, replicas[i]))
             if L == 10:
                 for (i,W) in enumerate([50, 100, 200]):
                     file = open("startenergy{}_{}x{}_{}.jl".format(percent[j],L,W, iteration), "w")
@@ -35,7 +35,7 @@ for (j,PS) in enumerate(ps):
                     file.write("ds = [{}, {}]\n".format(W,L))
                     file.write("ps = "+PS+"\n")
                     file.write("energymeasure(\"compile.txt\", 1, 1, 1, ds, gates, ps)\n")
-                    file.write("@time energymeasure(\"dat/{}x{}_{}toff_20dec_{}replicas_{}.txt\", 10, 20, {}, ds, gates, ps)".format(W,L,percent[j],replicas[i],iteration, replicas[i]))
+                    file.write("@time energymeasure(\"dat/newdata/{}x{}_{}toff_20dec_{}replicas_{}.txt\", 10, 20, {}, ds, gates, ps)".format(W,L,percent[j],replicas[i],iteration, replicas[i]))
             if L == 20:
                 for (i,W) in enumerate([50, 100, 200]):
                     file = open("startenergy{}_{}x{}_{}.jl".format(percent[j],L,W, iteration), "w")
@@ -46,4 +46,4 @@ for (j,PS) in enumerate(ps):
                     file.write("ds = [{}, {}]\n".format(W,L))
                     file.write("ps = "+PS+"\n")
                     file.write("energymeasure(\"compile.txt\", 1, 1, 1, ds, gates, ps)\n")
-                    file.write("@time energymeasure(\"dat/{}x{}_{}toff_20dec_{}replicas_{}.txt\", 10, 20, {}, ds, gates, ps)".format(W,L,percent[j],replicas[i],iteration, replicas[i]))
+                    file.write("@time energymeasure(\"dat/newdata/{}x{}_{}toff_20dec_{}replicas_{}.txt\", 10, 20, {}, ds, gates, ps)".format(W,L,percent[j],replicas[i],iteration, replicas[i]))
