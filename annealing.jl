@@ -62,8 +62,9 @@ module annealing
   function iden(i::Int, reverse::Bool=false) i end
 
   # 3-bit gates
-  function toff(i::Int, reverse::Bool=false)
-    bits(i)[end-1:end] == "11" && return i $ 4
+  function toff(i::Int)
+    i == 3 && (return 7)
+    i == 7 && (return 3)
     return i
   end
   function idid(i::Int, reverse::Bool=false)  i end
