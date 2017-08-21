@@ -8,7 +8,7 @@ module annealing
   using Graphslib
   using JLD
   import StatsBase.counts
-  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, edgebitsmap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, solve_gategraph, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts, get_uniquesolutions
+  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, edgebitsmap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, solve_gategraph, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts, get_uniquesolutions, bits_to_state, state_to_bits, bitsevolution, order_parameter
 
   # Faster and nicer definition for AND and OR
   ∧(A::Bool, B::Bool) = A && B
@@ -51,6 +51,25 @@ module annealing
   function postoidx(pos::Array{Int}, ds::Array{Int})
     """ Position vector to index. Index along y first. """
     return vectoidx(Array(pos)[end:-1:1],ds[end:-1:1])
+  end
+
+  function bits_to_state(bits)
+      (mod(length(bits), 3) != 0) && error("Length of bits array has to be divisible by 3")
+      state = zeros(Int, Int(length(bits)/3))
+      for (i, bit) in enumerate(bits)
+          state[round(Int, (i-1)/3, RoundDown) + 1] += (bit << mod(i-1,3))
+      end
+      return state
+  end
+
+  function state_to_bits(state)
+      bits = zeros(Int, length(state) * 3)
+      for (i, st) in enumerate(state)
+          bits[(i - 1) * 3 + 1] = ((st & 4) >> 2)
+          bits[(i - 1) * 3 + 2] = ((st & 2) >> 1)
+          bits[(i - 1) * 3 + 3] =  (st & 1)
+      end
+      return bits
   end
 
   # 2-bit gates
@@ -397,8 +416,6 @@ module annealing
   end
 
   """
-  BETA ALERT: FUNCTION SHOULD WORK PROPERLY, BUT WAS NOT YET THROUGLY TESTED.
-  IF ANY ERROR SHOULD OCCUR PLESE REPORT!
   Function checks if the graph with the given parameters has a
   unique solution.
   The function returns the states of the fixed gates on each side.
@@ -591,3 +608,38 @@ module annealing
   end
   end
 ###################################################################################################################
+
+
+function bitsevolution(ds, onebits, ps, gates, iterations)
+  rightonebits = zeros(Int, iterations)
+  for i in 1:iterations
+    g = vertex_lattice(ds, gates, 3, ps=ps)
+    bits = shuffle(append!(ones(Int, onebits), zeros(Int, ds[2] * 3 - onebits)))
+    state = bits_to_state(bits)
+    g.vs[1:ds[2]]["state"] = state
+    solve_gategraph!(g)
+    outbits = state_to_bits(g.vs["state"][end - ds[2] + 1:end])
+    rightonebits[i] = sum(outbits)
+  end
+  return rightonebits
+end
+
+function order_parameter(state_counts, solution)
+  nstates = length(solution)
+  ord_par = zeros(length(state_counts))
+  for (i, state_count) in enumerate(state_counts)
+    for (j, state) in enumerate(solution)
+      ord_par[i] += state_count[j][state+1]
+    end
+  end
+  ord_par = 8/7 * (ord_par * 1/nstates - 1/8)
+  return ord_par
+end
+
+function errors_in_state_counts(state_counts, solution, fixed_bits)
+   for (i, fixed) in enumerate(fixed_bits)
+     if (fixed && state_counts[i][solution[i]+1] < 0.75)
+       println("ERROR")
+     end
+   end
+ end
