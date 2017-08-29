@@ -8,7 +8,7 @@ module annealing
   using Graphslib
   using JLD
   import StatsBase.counts
-  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, edgebitsmap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, solve_gategraph, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts, get_uniquesolutions, bits_to_state, state_to_bits, bitsevolution, order_parameter
+  export idxtopos, postoidx, swap, iden, idid, idsw, swid, toff, swsw, random_gatemap, edgebitsmap, vertex_lattice_gategraph, vertex_lattice, compute_energydiff, solve_gategraph!, solve_gategraph, check_graph_solution, init_annealing!, anneal!, montecarlo!, majority, totalunfits, unique_solution, energymeasure, statecounts, get_uniquesolutions, bits_to_state, state_to_bits, bitsevolution, order_parameter, errors_in_state_counts, error_in_jld
 
   # Faster and nicer definition for AND and OR
   ∧(A::Bool, B::Bool) = A && B
@@ -359,7 +359,9 @@ module annealing
     do_majority && (return state_counts)
   end
 
-  """Calculates one complete annealing from Temperature T = 1 to (almost) 0 in mcsteps montecarlo steps"""
+  """
+  Calculates one complete annealing from Temperature T = 1 to (almost) 0 in mcsteps montecarlo steps
+  """
   function montecarlo!(g::Graph, mcsteps::Int)
     gmap = g.vs["gate"]; bitsmap = g.es["bits"]
     statemap = g.vs["state"]; fixedmap = g.vs["fixed"]
@@ -638,8 +640,15 @@ end
 
 function errors_in_state_counts(state_counts, solution, fixed_bits)
    for (i, fixed) in enumerate(fixed_bits)
-     if (fixed && state_counts[i][solution[i]+1] < 0.75)
+     if (fixed && (state_counts[i][solution[i]+1] < 0.75) )
        println("ERROR")
+       return 1
      end
    end
+   return 0
+ end
+
+ function error_in_jld(fname)
+   a = load(fname)
+   errors_in_state_counts(a["state_counts"][end],a["solution"],a["fixed"])
  end
