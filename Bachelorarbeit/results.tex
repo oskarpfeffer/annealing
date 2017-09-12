@@ -1,0 +1,234 @@
+
+\chapter{Results}
+
+In order to examine the dynamics and the behavior of the vertex model we studied many different cases of the random vertex lattice and used two different techniques to reach the ground state, \textit{`Vanilla' Annealing} and \textit{Annealing with Learning} \cite{Chamon}.
+First we looked at the vertex model with open boundary (OB) conditions, meaning that no gate on the boundary is fixed and the system has $2^{3L}$ ground state configurations to choose from.
+There we do a finite size energy scaling with the annealing time for the SA algorithm and show how the exponential behavior of the scaling varies with the concentration of Toffoli gates.
+Then we looked at the fixed (FB) and mixed (MB) boundary conditions, where respectively the left boundary is completely fixed or $66\%$ of the gates are fixed on each boundary and there is a unique ground state where the system can settle.
+In this case we show the difference between linear behavior for $0\%$ Toffoli and exponential behavior for $25\%$ Toffoli gates even for the `easy' case with a fixed boundary.
+Finally, we show some proprieties of an improved protocol for the SA algorithm that leads to an exponential speedup for random squared systems with mixed boundary conditions.
+The speedup of the enhanced Annealing with Learning makes this technique of possible practical relevance.
+
+The plain code of the simulations is written in \textit{JULIA}, a high-level dynamic programming language, and can be found in the appendix.
+
+\section{Thermal Annealing with open boundaries}
+In this section we look at the dynamics of relaxation into the ground state for a system with open boundaries (OB) via `Vanilla' Annealing.
+This is the standard SA algorithm described in section \ref{sec:SA}, where we start from a temperature of order $K$ down to zero over a total time $\tau$ following the temperature schedule $T(t) = K(1-\frac{t}{\tau + 1})$ (the nominator $\tau +1$ was chosen for easiness in writing the code and since $\tau >>1$, $T(\tau) \approx 0$ is sufficiently small as to not make any difference in the simulation.), where $K$ is the ferromagnetic coupling constant connecting the bits of adjacent gates.
+
+In this simulation, as well as in the rest of the paper, the SA algorithm updates whole gates instead of only single spins, so that the gate constraints are always satisfied.
+This way the SA algorithm chooses between 8 possible configurations of the gate, from all the input bits equal 0 to all the input bits equal 1.
+
+\begin{figure}[hbtp]
+  \begin{subfigure}{.5\textwidth}
+    \centering
+    \includegraphics[width=1.\linewidth]{Graphics/OB_E_vs_decades_0and15toff.pdf}
+    \caption{Energy density $\frac{E}{N}$ of a system of size $L \times W$ after a total annealing time of $2^{\text{decade}}$. The energy density in the $0\%$ TOFFOLI case drops drastically while the $15\%$ TOFFOLI case shows its hardness in reaching the ground state as expected from a problem in NP. The thermal equilibrium energy for every system is 0, so that $(E-E_\text{thermal})/{N} =  {E}/{N}$.\label{fig:OB_E_vs_dec}}
+  \end{subfigure}
+  \begin{subfigure}{.5\textwidth}
+    \centering
+    \includegraphics[width=1.\linewidth]{Graphics/OB_E_vs_1overW_12decades_50toff.pdf}
+    \caption{Example of the finite size scaling of the energy for a system with $100\%$ TOFFOLI concentration after an annealing time of 17 decades ($\tau=2^{17}$). The energy scales approximatively linearly with $1/W$, so that the expected energy density for a system of infinite size is the intersection of the fitted line with the y-axis.
+    The multiple data points for some $W$ come from the different sizes in $L$.\label{fig:OB_E_vs_1overW}}
+  \end{subfigure}
+  \caption{\label{fig:OB_intro}}
+\end{figure}
+
+The analysis of the OB case was done for systems with fixed length in y direction $L\in \{ 5,10,20 \}$ and varying the length of the system in x direction $W$ for values between 50 and 300, in order to get an estimate of the energy density for a system of infinite length $W$ after an annealing time $\tau$.
+An example of the extrapolation of the energy density after Annealing in $\tau=2^{17}$ steps for a system of infinite size $W$ can be seen in fig. \ref{fig:OB_E_vs_1overW}, where it is estimated by the intersection of the fitted line with the y-axis.
+
+Extrapolating the finite size energy for multiple decades allows us to find out the scaling of the energy density with the annealing time.
+The expected behavior of the annealing time needed to find the ground state is polynomial for a zero TOFFOLI concentration and else exponential.
+
+\begin{figure}[hbtp]
+  \centering
+  \includegraphics[width=0.5\textwidth]{Graphics/OB_0TOFF_E_vs_1overtau}
+  \caption{The energy density of systems without TOFFOLI gates decreases polynomially with the annealing time, as expected of annealing on a one dimensional Ising spins chain. This result is a good check that the code is working correctly.}
+  \label{fig:OB_0TOFF_codecheck}
+\end{figure}
+
+Indeed, we found that the data correspond to this assumption.
+Figure \ref{fig:OB_0TOFF_codecheck} shows the polynomial behavior of the energy density with the annealing time.
+From $\ln (E/N) \sim c \ln(1/\tau)$ to get the constant $c_0$ follows $\tau \sim E^{-1/c_0}$, where $c_0=0.307\pm 0.004$.
+This polynomial behavior is also a quality check for the code that it is working correctly.
+
+For the systems with TOFFOLI gates, we found that the scaling of the annealing time is exponential in the inverse energy density.
+The results are shown in figure \ref{fig:OB_TOFF}.
+In order to get the scaling we made the ansatz $E/N = m/\ln(\tau)^c$.
+Therefore, plotting the logarithm of this formula we can extract the coefficient $m$ and the power constant $c$ by fitting a line.
+More specifically:
+\begin{align}
+  \ln \left(\frac{E}{N}\right) &= \ln \left(\frac{m}{\ln( \tau)^c} \right)\\
+  &= \ln(m) + c \ln(\ln(\tau)) \text{,}
+\end{align}
+where $\ln(m)$ is the intersection of the fitted line with the y-axis and c is its slope.
+
+Thus solving this formula for $\tau$ and by redefining $m^{1/c}=\eta$ we get
+\begin{align}
+  \tau \sim e^{\eta \left(E/N\right)^{-1/c}}.
+\end{align}
+
+
+\begin{figure}[hbtp]
+  \begin{subfigure}{.5\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/OB_E_vs_1overdecadenew.pdf}
+    \caption{This log-log plot shows the exponential time needed to reach zero energy. Decade stands for $\ln(\tau)$. The slope of each fitted line is $c$, while the intersection of each fitted line with the y-axis is $m$. For the concentrations $5\%$ and $10\%$ the smaller systems were not considered because of finite size effects, thus the big error bars.}
+    \label{fig:OB_E_vs_1overdecade}
+  \end{subfigure}
+  \begin{subfigure}{.5\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/OB_constant_values.pdf}
+    \caption{Values of the constants $\eta=m^{1/c}$ and $c$ for different TOFFOLI concentrations. As the concentration of TOFFOLI increases, the problem gets harder, i.e. $c$ decreases.}
+    \label{fig:OB_constant_values}
+  \end{subfigure}
+  \caption{}
+  \label{fig:OB_TOFF}
+\end{figure}
+
+
+\section{Thermal Annealing with mixed and fixed boundaries}
+
+In this section we present the results of the standard SA algorithm methods for squared systems with mixed (MB) and fixed (FB) boundary conditions.
+FB conditions means that all the gates on the left boundary of the system are fixed and are not considered in the SA algorithm, so that they are initialized in one state and cannot be changed.
+The MB conditions case is when the left and the right boundary are partially, but not completely fixed.
+For both boundary conditions we made sure that there is a unique ground state where the system can settle.
+While this is trivially satisfied for FB conditions, it is harder to check for random systems with MB conditions and we had to look for systems that satisfy this requirement.
+This was done by randomly initializing the full left boundary of the system, solving the system by direct computation, then fixing some of the gates on the left and the right boundaries and finally doing a full search over all the possible configurations of the unfixed bits on the boundaries and checking whether there was only one possible configuration leading to a solution.
+Since this process involves doing a full search, the time required to check this condition scales as $2^{3\times \# \text{unfixed gates}}$ and the biggest system size that we were able to analyze was $21\times 21$ gates.
+
+Interesting is the computational meaning of FB and MB conditions.
+While FB represent a trivial computation, e.g. multiplication of two numbers, that can always be solved in polynomial time, MB conditions instances are a lot more interesting and represent way harder problems in NP that are worth studying.
+One common example is factorizing, which can easily be written with this vertex lattice system.
+Taking the multiplication system, instead of fixing the full left boundary, where the two factors are fixed and the bits of the product are initialized to 0, it is possible to fix the final product on the output (right boundary), the bits of the product on the input to 0 and all the ancillary bits needed to write a reversible computation to 0.
+This way the system for multiplication is transformed in a factorizing system.
+
+The systems that we analyzed were squared systems $L\times L$, where L is a multiple of 3 from 3 to 21, for TOFFOLI gates concentrations of $0\%$ and $25\%$.
+For the MB conditions we fixed $66\%$ of each boundary.
+We let each system anneal for a total time of $8$ decades up to $17$ decades.
+
+\begin{figure}[hbtp]
+  \centering
+  \includegraphics[width=0.5\textwidth]{Graphics/annealingscaling_timetosolution.pdf}
+  \caption{Averaged time to solution for systems with $0\%$ TOFFOLI gates. The scaling of the time to solution is linear with the system size for both MB and FB as expected.}
+  \label{fig:annealingscaling_timetosolution}
+\end{figure}
+
+Again we did a quality check and found the scaling of the time to solution for the case with $0\%$ TOFFOLI gates and got the same result both for MB and FB, as should be expected since there is no computation being done and the information is just transported from one boundary to the other.
+The result was that the time to solution scales as $\tau_\text{MB} \sim L^{3.76\pm 0.15}$ for MB and $\tau_\text{FB} \sim L^{3.68\pm 0.12}$ for FB.
+
+For the systems with $25\%$ TOFFOLI gates, we found that there is no difference in the scaling of FB and MB.
+Even though the FB case is much easier in terms of computational complexity, since it is solvable in polynomial time by direct computation, Simulated Annealing fails in solving it efficiently and the difficulty of this problem gets as bad as with MB conditions.
+
+In order to analyze the data we defined an order parameter $m$ different from the energy, that measures the overlap of the final state of the system with the solution,
+\begin{equation}
+  m = \frac{8}{7} \left[\frac{1}{L^2}\sum_g \delta(q_g^\text{fin},q_g^\text{sol}) -\frac{1}{8}\right],
+\end{equation}
+where the sum goes over all the gates and $q_g^\text{fin}$ and $q_g^\text{sol}$ represent the state of the gate $g$ of the annealed system and of the solution.
+The motivation for this order parameter is that even though the system may be at low energies, the distance from the true solution may be big.
+One spin flip in the middle raises the energy from the ground state to the first excited state, but the error propagates and the system might be still far away from the solution.
+The solution with which the order parameter is evaluated was saved in the beginning when the full search for the systems was done.
+This order parameter becomes $m=1$ when the solution is reached and is $m=0$ when the system is in a disordered state, where 1 every 8 gates agree with the solution by chance.
+
+\begin{figure}[hbtp]
+  \begin{subfigure}{.5\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealinscaling_orderparameter_vs_LxL.pdf}
+    \caption{The difference between systems with and without TOFFOLI is instantly visible, the harder systems (red and green) are far from solution while the easier ones (black and blue) are already solved.}
+    \label{fig:annscal_ordpar_LxL}
+  \end{subfigure}
+  \begin{subfigure}{.5\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealingscaling_orderparameter_vs_annealingtime_MB.pdf}
+    \caption{Simulated Annealing of systems with MB condition. The systems with FB look analogously. The annealing time $\tau$ is given in decades.}
+    \label{fig:annscal_ordpar_anntime}
+  \end{subfigure}
+  \caption{SA of systems with $0\%$ and $25\%$ TOFFOLI. The systems without TOFFOLI reach the solution easily while both MB and FB cases with TOFFOLI gates take exponential time.}
+  \label{fig:annealingscaling}
+\end{figure}
+
+In figure \ref{fig:annealingscaling} the difference in complexity between systems with and without TOFFOLI gates is evident.
+When there are no TOFFOLI gates the system reaches solution efficiently in polynomial time with the size.
+However in systems with TOFFOLI gates the Simulated Annealing algorithm cannot solve it efficiently, not even when one complete boundary is fixed and the solution could be extracted by simple direct computation.
+
+This can be explained by the loss of ergodicity of the algorithm and the glassiness of the system.
+There are many low energy states and once the system settles in one of those local minima it is very hard for the algorithm to escape, because it requires many uphill moves in the energy and the system becomes glassy.
+In order to maintain ergodicity at lower temperatures, i.e. to make sure that any point in the configuration space can be reached from any other point, the time required by the algorithm increases exponentially with the system size.
+Once the algorithm becomes less ergodic it is not assured to reach solution, since the requirements of the theorem presented in section \ref{sec:SA} are not satisfied.
+
+The fact that SA fails even to solve systems with FB conditions suggests that it cannot be a practical algorithm for this type of problems and a new approach is required.
+This leads us to the last result of this paper where the proprieties of an improved protocol of the normal `Vanilla' Annealing is shown.
+
+\section{Annealing with Learning}
+
+The Annealing with Learning protocol is an improvement of the normal SA where the algorithms performs multiple thermal annealing steps and learns some new information after each step.
+We found that this protocol leads to an exponential speedup compared to normal SA for squared systems and represents therefore a possibly interesting technique for practical applications.
+
+The algorithm works as follows: (1) we start by annealing $N_R$ replicas of the same system with an annealing time $\tau$ that is long enough for the correlation length to grow beyond some columns of gates so that the final state of those gates after annealing coincides with the solution with a probability $p\sim exp(-\lvert x \rvert / \xi)>\frac{1}{2}$, where $\xi$  is the correlation length and $x$ the distance over which the correlation length has to grow; (2) if a fraction of the replicas higher than a threshold $\alpha$ agree on the assignment of a particular gate then this gate is fixed in this assignment; (3) the annealing protocol is repeated independently $N_R$ times with the particularity that fixed gates are not visited by the Metropolis-Hastings algorithm; (4) this procedure is repeated multiple times until all gates are fixed.
+
+The number of replicas $N_R$ needed to ensure a correct assignment of a gate with an error rate smaller than $\epsilon$ is shown in \cite{Chamon} and is given by $N_{R\epsilon} = \ln \left[ \frac{2p-1}{p} \frac{\epsilon}{L^2}\right]/ \ln \left[ 2p^{1-\alpha}(1-p)^\alpha \right]$, where $\alpha$ is the learning threshold and $p>\frac{1}{2}$ is the probability of the correct assignment of a gate for one replica.
+In our simulations we used 500 replicas of independently annealed systems to ensure a small error rate.
+
+While the improvement of this method for a system with FB conditions was already shown in the original paper, where the time to solution decreases from exponential to polynomial, we analyze the scaling of Annealing with Learning for more interesting, harder problems with MB conditions.
+An example of how the algorithm works for systems with MB conditions is shown in figure \ref{fig:colorplot_example}.
+
+\begin{figure}[hbtp]
+  \centering
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/a100_21x21_0666fixed_9dec_91.png}
+  \end{subfigure}
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/a100_21x21_0666fixed_9dec_910.png}
+  \end{subfigure}
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/a100_21x21_0666fixed_9dec_920.png}
+  \end{subfigure}
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/a100_21x21_0666fixed_9dec_930.png}
+  \end{subfigure}
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/a100_21x21_0666fixed_9dec_940.png}
+  \end{subfigure}
+
+  \caption{Annealing with Learning of a system with size $21\times 21$ with $100\%$ TOFFOLI gates and with an annealing time of 9 decades for each learning step. Shown is the overlap of the state of each gate with the solution averaged over 500 replicas after 1,10,20,30 and 40 learning steps. White means that the gate is fixed in the correct state, dark means random state configuration far from solution. After 43 learning steps the system was solved.}
+  \label{fig:colorplot_example}
+\end{figure}
+
+Before going over to the efficiency of this algorithm we want to outline one of its defects.
+Since the dynamic correlation length in the SA algorithm grows only exponentially with the annealing time, the requirement $p\sim \exp(-\lvert x \rvert / \xi)>\frac{1}{2}$ is often not satisfied if the annealing time is not long enough (to expect a speedup we cannot wait until the system is already solved by pure annealing) and the algorithm makes mistakes.
+In the most difficult system configurations $15\%$ of the systems made a mistake before reaching solution, but for all the other configurations of the parameters (TOFFOLI concentration, system size, annealing time), the error rate was always under $10\%$.
+Even though this error rate is pretty high, the order parameter for systems that made a mistake could nonetheless grow close to 1 where almost all the gates of the system were in the right assignment except for some gates in a small region.
+An example of this behavior can be seen in figure \ref{fig:colorplot_mistake}.
+
+\begin{figure}[hbtp]
+  \centering
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/Error/a100_21x21_0666fixed_12dec_71.png}
+  \end{subfigure}
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/Error/a100_21x21_0666fixed_12dec_75.png}
+  \end{subfigure}
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/Error/a100_21x21_0666fixed_12dec_79.png}
+  \end{subfigure}
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/Error/a100_21x21_0666fixed_12dec_713.png}
+  \end{subfigure}
+  \begin{subfigure}{0.18\textwidth}
+    \includegraphics[width=1.\linewidth]{Graphics/annealing_examples/Error/a100_21x21_0666fixed_12dec_716.png}
+  \end{subfigure}
+  \caption{Annealing with learning after 1,5,9,13 and 16 learning steps. Dark means far away from the correct assignment, white means fixed in the right state. Most of the system is correctly solved except for a small connected region (the top and the bottom gates are connected by periodic boundaries on the vertical axis) and finding the true solution for this instance is an easy problem since the complete right boundary is fixed.($100\%$ TOFFOLI gates, size: $21\times 21$ gates, annealing time: 12 decades)}
+  \label{fig:colorplot_mistake}
+\end{figure}
+
+Since the mistakes usually happen far away from fixed gates and the algorithm usually fixes new gates close to a fixed region, a possible improvement could be a an extra heuristical condition for fixing a gate, where the gate is only fixed if it is close to some correct region.
+This way no unwanted gates are fixed where no information about the correct solution from the rest of the system has arrived yet.
+However, this implementation has not been tried in this work and is not guaranteed to remove this defect from this algorithm.
+
+Putting this problem aside, we did a scaling of the order parameter $m$ with the learning steps and annealing time without taking into consideration that some systems did commit mistakes.
+Figure \ref{fig:3-21_theta} shows the dependence of the averaged order parameter with the learning steps and the total annealing time for a system of size $18\times 18$ and with only TOFFOLI gates.
+From this plot we see that the order parameter grows logarithmically with the annealing time for a fixed number of learning steps.
+This means that the order parameter scales as $m(Z)\sim c(Z) \ln (\tau)$, $c(Z)$ is the slope of the fitted lines and it depends on the number of learning steps $Z$.
+On the right plot it is shown how $c$ scales linearly with $Z$, i.e. $c=c_0+\theta Z$, where $c_0$ is the scaling constant for pure SA and $\theta$ is some coefficient determining the slope of the scaling.
+
+Repeating the same scaling for all the system sizes we get the scaling of $\theta$ with $L$.
+On the log-log plot of figure \ref{fig:3-21_nu} we can determine the scaling of emacs
+$\tau \sim \exp(\frac{m L^{-\nu}}{\# \text{learning steps}})$
+
+
+\chapter{Discussion}

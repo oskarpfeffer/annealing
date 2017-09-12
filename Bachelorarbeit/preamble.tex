@@ -1,0 +1,72 @@
+\documentclass[
+ paper=A4,pagesize=automedia,fontsize=12pt,
+ BCOR=15mm,DIV=22,
+ twoside,headinclude,footinclude=false,
+ %fleqn,             % fleqn = linksbündige Ausrichtung von Formeln
+ bibtotocnumbered,          % Literaturverz. im Inhaltsverz. eintragen
+ liststotoc,                % Abbildungsverz. im Inhaltsverz. eintragen
+ listsleft,                 % Abbildungsverz. an der längsten Nummer ausrichten
+ pointlessnumbers,          % kein Punkt nach Überschriftsnummerierung
+ cleardoublepage=empty      % Vakatseiten ohne Paginierung
+]{scrbook}
+\setlength\parindent{0em}
+
+% Kodierung, Schrift und Sprache auswählen
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+%\usepackage[ngerman]{babel}
+% damit man Text aus dem PDF korrekt rauskopieren kann
+\usepackage{cmap}
+% Layout: Kopf-/Fußzeilen, anderthalbfacher Zeilenabstand
+\usepackage{scrpage2} \pagestyle{scrheadings}
+                      \clearscrheadfoot
+                      \ihead{\headmark}\ohead{\pagemark}
+                      \automark[subsection]{section}
+                      \setheadsepline{0.5pt}
+\usepackage{setspace} \onehalfspacing
+\deffootnote{1em}{1em}{\textsuperscript{\thefootnotemark }}
+% Grafiken, Tabellen, Mathematikumgebungen
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{amsmath,amsfonts,amssymb}
+% Darstellung von Fließumgebungen
+\usepackage{flafter,afterpage}
+\usepackage[section]{placeins}
+\usepackage[margin=8mm,font=small,labelfont=bf,format=plain]{caption}
+\usepackage[margin=8mm,font=small,labelfont=bf,format=plain]{subcaption}
+
+\numberwithin{equation}{section}
+\numberwithin{figure}{section}
+\numberwithin{table}{section}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Ab hier ist Platz für eigene Ergänzungen (Pakete, Befehle, etc.)
+
+% Dieses Paket liefert den Blindtext, der als Platzhalter in den Beispieldateien steht.
+% Das kannst Du also entfernen, wenn Du den Blindtext nicht mehr brauchst.
+\usepackage{lipsum}
+\usepackage{multirow}
+\usepackage{subcaption}
+\usepackage[toc,page]{appendix}
+\usepackage[T1]{fontenc}
+\usepackage{beramono}
+\usepackage{listings}
+\usepackage[usenames,dvipsnames]{xcolor}
+\lstdefinelanguage{Julia}%
+  {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,end,export,false,for,function,immutable,import,importall,if,in,macro,module,otherwise,quote,return,switch,true,try,type,typealias,using,while},%
+   sensitive=true,%
+   alsoother={$},%
+   morecomment=[l]\#,%
+   morecomment=[n]{\#=}{=\#},%
+   morestring=[s]{"}{"},%
+   morestring=[m]{'}{'},%
+}[keywords,comments,strings]%
+
+\lstset{%
+    language         = Julia,
+    basicstyle       = \ttfamily,
+    keywordstyle     = \bfseries\color{blue},
+    stringstyle      = \color{magenta},
+    commentstyle     = \color{ForestGreen},
+    showstringspaces = false,
+}

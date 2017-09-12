@@ -1,0 +1,103 @@
+\input{preamble}
+\renewcommand\thesection{\arabic{section}}
+\renewcommand{\thepage}{\arabic{page}}
+\newtheorem{theorem}{Theorem}
+\begin{document}
+
+
+\frontmatter
+
+
+% Titelpageseite
+\begin{titlepage}
+ \begin{tabularx}{\linewidth}{X}
+  \includegraphics[width=6cm]{Graphics/TU_Logo_SW}                                                          \\\hline\hline
+
+  \vspace{4.5em}
+
+  \begin{singlespace}\begin{center}\bfseries\Huge
+
+  Simulated annealing of a vertex lattice model implementation of reversible classical computation
+
+  \end{center}\end{singlespace}
+
+  \vspace{5.5em}
+
+  \begin{singlespace}\begin{center}\large
+  Bachelor-Arbeit                                                                                  \\ zur Erlangung des Hochschulgrades \\
+  Bachelor of Science                                                                              \\
+  im Bachelor-Studiengang Physik
+  \end{center}\end{singlespace}\medskip
+
+  \begin{center}vorgelegt von\end{center}
+  \begin{center}
+  {\large OSKAR PFEFFER}                                                                           \\ geboren am 20.05.1996 in Genua, Italien
+  \end{center}\medskip
+
+  \begin{singlespace}\begin{center}\large
+  Institut für Festkörper und Werkstoffforschung                                                 \\
+  Fachrichtung Physik                                                                              \\
+  Fakultät Mathematik und Naturwissenschaften                                                     \\
+  Technische Universität Dresden                                                                  \\ 2017
+  \end{center}\end{singlespace}
+ \end{tabularx}
+\end{titlepage}
+
+
+% Gutachterseite
+\thispagestyle{empty}\vspace*{48em}
+
+Eingereicht am xx.September 2017\vspace{1.5em}
+\par{\large\begin{tabular}{ll}
+ 1. Gutachter: & Prof.~Dr.~Jeroen Van Den Brink \\
+ 2. Gutachter: & Prof.~Dr.~Andrei Ruckenstein \\
+ \end{tabular}}
+
+
+% Abstractseite
+\newpage
+\begin{center}\large\bfseries Summary\end{center}
+
+Abstract \\
+English: \\
+This project will study the simulated annealing as a method for reaching the solution of classical computational problems encoded in the ground state of a novel class of planar vertex models with boundaries. It was recently shown that such vertex models provide a statistical mechanics representation of reversible circuits for universal classical computation. Unlike most other statistical mechanics descriptions of classical computation, the vertex models display trivial bulk thermodynamic behavior independent of the computation they represents. Thus,  the complexity of specific computations is reflected in the dynamics of a system's relaxation into its ground state. This project shall study classical simulated annealing as the simplest and most intuitive dynamics for relaxation into the ground state one can  impose on vertex models representing specific reversible classical computations. Our goal is (a) to assess the efficiency of simulated annealing in reaching the solution of typical classical computational problems;  and (b) to quantify the ``complexity'' of the computation as measured by the scaling of the ``time-to-solution'' with the size and difficulty of the computational problem.
+
+
+\vspace{10em}
+Abstract \\
+Deutsch: \\
+s
+
+% Inhaltsverzeichnis
+
+%\cleardoublepage
+\tableofcontents
+
+% Hauptteil
+\pagenumbering{arabic}
+
+\input{theory}
+\input{results}
+\input{bibliography}
+
+
+\clearpage
+
+\input{appendix}
+
+\minisec{Acknowledgements}
+I would like to thank Dr. Stefanos Kourtis for his constant support and help before and during the work, Prof. Andrei Ruckenstein for pushing me into doing this thesis on this topic, and Prof. Claudio Chamon, for introducing me to the world of physical research and for welcoming me in his research group.
+Finally, I would like to thank my parents, whom I owe everything and who made my academic education possible.
+% Erklärung
+\clearpage
+\thispagestyle{empty}
+\minisec{Erklärung}\vspace*{1.5em}
+
+Hiermit erkläre ich, dass ich diese Arbeit im Rahmen der Betreuung am Institut
+für Festkörper und Werkstoffforschung ohne unzulässige Hilfe Dritter verfasst und alle Quellen als solche gekennzeichnet habe.
+
+\vspace*{45em}
+
+Oskar Pfeffer \par
+Dresden, September 2017
+\end{document}

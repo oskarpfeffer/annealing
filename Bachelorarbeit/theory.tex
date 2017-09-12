@@ -1,0 +1,178 @@
+
+\chapter{Introduction}
+
+In recent years problems of computer science have gotten ever more attention from the physical community, which suggested new approaches connecting computational problems to physical systems, thus providing some insights from statistical physics \cite{Altarelli}. From simulated annealing (SA) over deep learning algorithms and other algorithms based on quantum mechanics or even quantum annealers, there is much hope to find more efficient ways to solve some interesting computational problems in the class NP and NP-complete, such as ground state finding and integer factorization \cite{Henelius}.
+
+The motivation for this increased interest of the physical community for some complexity theory problems is that they can be mapped on physical systems and vice versa, thus delivering a broader understanding of both subjects and opening the possibility of new approaches that benefit from physical and computational insights.
+
+This paper will focus on a recent work \cite{Chamon} on reversible classical computing, which provided a new tool that makes use of simulated annealing to find the result of a generic computation encoded in the ground state.
+In their work they introduce a quantum vertex lattice and show some of its proprieties.
+This paper will examine some further proprieties such as its complexity given by the efficiency of thermal annealing in reaching the solution of the system.
+
+The first part of the paper will provide some theoretical background about complexity theory, classical annealing and the vertex model to be studied. In the second part, the simulations will be presented and finally in the last part the implications of the results on the proposed system will be discussed.
+
+
+
+
+\chapter{Theoretical background}
+
+\section{Classical annealing \label{sec:SA}}
+
+Classical simulated annealing (SA), which was independently developed by \cite{Cerny} and \cite{Kirkpatrick2} is a ground state finding algorithm inspired by the typical annealing process in the metallurgy (heating followed by a controlled cooling down) and based on some central notions of statistical mechanics. Broad explanations of this topic can be found in \cite{SA} as well as in most other books on statistical mechanics algorithms.
+
+The basic concept of annealing is to warm up the simulated system so that it can evolve almost free from any constraining potential and  let it cool down slowly, so that it can settle down in the lowest energy state, the same way a metal cools down and grows a single crystal if the temperature was lowered slowly enough.
+For easy enough systems this indeed happens very quickly, since there usually are not many local minima and the energy difference between the local minima and the global minimum is generally big.
+However, when the problem gets more complex the SA algorithms needs a longer cooling time to find the global minimum.
+This is similar to the situation when in metallurgy the metal has some impurities and a fast cool down would not let the probe settle in the most ordered state.
+
+Simulated annealing makes use of statistical mechanics and the properties of large number of particles. This can be described using the Gibbs ensemble, where the probability of a system to be in a state $\alpha$ with energy $E_\alpha$ is given by the Boltzmann-Gibbs distribution
+\begin{equation}\label{eq:Boltzmann-Gibbs}
+  P_\alpha = \frac{1}{Z}e^{\frac{-E_\alpha}{k_BT}} \text{,}
+\end{equation}
+where $k_B$ is the Boltzmann constant ($k_B=1$ for simulated annealing), T is the computational temperature of the system and Z is the partition function, given by
+\begin{equation}\label{eq:partition_function}
+  Z = \sum_\beta e^{\frac{-E_\beta}{k_BT}} \text{,}
+\end{equation}
+where the sum goes over all possible configurations of the system denoted by $\beta$.
+
+Using this description it is possible to identify two different regimes.
+The high temperature regime, where the `chaotic' states are the most probable states, since the system is free from any constraints and there are exponentially more unordered states than ordered states. And the more interesting low temperature regime, where the system settles down in a low energy state even though they are extremely rare, because they are preferred by the system. I.e. as T decreases eq. \eqref{eq:Boltzmann-Gibbs} collapses into only lowest energy states.
+Take for example a ferromagnetic Ising spin chain with energy $E = -J \sum_{\langle i, j \rangle} \sigma_i \sigma_j$, where $\sigma = \pm 1$ and $J>0$.
+At high temperature the spins will have a random order and the most probable state will have zero energy.
+When the temperature is decreased the spins will align and close to zero temperature the most probable state is when all the spins are aligned with the ground state energy $E=-NJ$, where $N$ is the number of spins.
+
+For practical applications it is not enough to require close to zero temperature, as it is possible that the system freezes  before it reaches the ground state due to local metastable states where it stays trapped.
+This freezing can happen for example in the iterative improvement procedure, where only downhill moves in the energy are allowed until there is no possible move that decreases the energy. This procedure would let the system get stuck in a local minimum in the energy.
+
+A better procedure is described by the Metropolis-Hastings (M-H) algorithm \cite{Metropolis} that simulates a system of particles in equilibrium at a given temperature.
+When applied to an Ising spin model this algorithm visits each spin at random, inverts it (from $-1$ to $1$ and vice versa), and computes the change of the energy $\Delta E$. If $\Delta E \leq 0$ the inversion of the spin is accepted.
+Otherwise, the change is accepted with probability $P_T(\Delta E) = e^{-\frac{\Delta E}{T}}$. This is usually implemented by generating a random number $\chi \in \left[ 0 , 1 \right]$ and using the accepting criterion $\chi < e^{-\frac{\Delta E}{T}}$.
+This procedures mimics a system connected to a heat bath with temperature $T$ and ensures that the system will stochastically evolve into a Boltzmann-Gibbs distribution.
+
+While it is possible to let the system reach equilibrium by holding the temperature very low, it is way more efficient to start at a higher temperature and slowly decrease it as it is done in the simulated annealing procedure, that describes a procedure where the system is constantly hold at equilibrium while the temperature is decreased.
+Or, more clearly, the system starts at a high energy and trough the M-H algorithm it is allowed to reach equilibrium, then the temperature is slightly lowered and another step of the M-H is done so that the system stays in equilibrium.
+Then the temperature is further lowered until it is zero and the ground state energy is reached.
+The difficulty of the computation lies in the fact that the changes in temperature needed to preserve equilibrium sometimes become exponentially smaller while going to lower temperatures so that in practice it becomes impossible to perform an `adiabatic' simulated annealing.
+
+The particular usefulness and efficiency of this the M-H algorithm, as opposed for example to iterative improvement, lies in the fact that it will surely converge to thermal equilibrium (thermalization) and therefore lead the system to the desired configuration.
+This is ensured by the following theorem proven in \cite{Sethna}.
+\begin{theorem}\label{th:equilibrium}
+  A discrete dynamical system with a finite number of states can be guaranteed to converge to an equilibrium distribution $\rho$ if the computer algorithm
+  \begin{itemize}
+    \item is Markovian (has no memory),
+    \item is ergodic (can reach everywhere and is acyclic), and
+    \item satisfies detailed balance.
+  \end{itemize}
+\end{theorem}
+
+It is easy to see that the M-H algorithm satisfies in principle these premises.
+First of all, it represents a Markovian chain, since the configuration of the system $\chi^{n}$ depends only on the configuration right before it $\chi^{n-1}$, i.e. the acceptance probability $P_T(\Delta E)$ does not depend on past configurations and has therefore no memory.
+
+The ergodicity of the system is given by the fact that there is a probability $p>0$ for the system to go from a state to any other state in a finite number of steps.
+This propriety is mathematically obvious since any change can be accepted as given by $P_T(\Delta E)$, however we will see that for practical applications the algorithm might become non-ergodic at low temperatures for glassy systems, where the number of steps needed to reach any other state of the system tends to infinity and the equilibrium distribution cannot be reached.
+
+Lastly, the fact that the M-H algorithm satisfies detailed balance and reversibility is the main principle of this algorithm and how this is assured can be seen explicitly in \cite{M-H_algorithm}.
+Detailed balance means that given a function $p(x,y)$ representing the transition probability of the system in a state $x$ into a state $y$ and a probability density $\pi(x)$ then
+\begin{equation}
+  \pi(x)p(x,y)=\pi(y)p(y,x) \text{.}
+\end{equation}
+From a thermodynamical perspective the reversibility of the M-H is satisfied, the system in a state $x$ has Boltzmann probability density $\pi(x)=\frac{1}{Z}e^{-\frac{E(x)}{T}}$ and the probability in the M-H algorithm to accept a change leading to a higher energy state $y$ is $p(x,y) = e^{-\frac{E(y)-E(x)}{T}}$ therefore leading to the detailed balance equation
+\begin{align}
+  \pi(x)p(x,y) = \frac{1}{Z} e^{-\frac{E(x)}{T}} \cdot e^{-\frac{E(y)-E(x)}{T}}
+  = \frac{1}{Z} e^{-\frac{E(y)}{T}} = \pi(y) = \pi(y) p(y,x) \text{,}
+\end{align}
+where the probability of a downhill (energy lowering) change is $p(y,x)=1$.
+
+The simulated annealing algorithm can be modified and adapted for many different systems, there are only a few requirements needed to make use of it. First of all, there has to be a system described by a great amount of variables that can be randomly slightly variated (e.g. spin value, displacement). Secondly, an energy function that describes the change of energy after the variation, and lastly an annealing schedule for the temperature.
+
+
+
+%
+% In order to be able to make use of SA, the problem usually needs to be mapped onto an Ising spin model (i.e. where each spin has states $+1$ or $-1$) and a valid energy function has to be formulated.
+% Then in statistical thermodynamics the probability of a system to be in a state $\alpha$ with energy $E_\alpha$ is given by the Boltzmann-Gibbs distribution
+% \begin{equation}\label{eq:Boltzmann-Gibbs}
+%   P_\alpha = \frac{1}{Z}e^{\frac{-E_\alpha}{k_BT}} \text{,}
+% \end{equation}
+% where $k_B$ is the Boltzmann constant ($k_B=1$ for simulated annealing), T is the computational temperature of the system and Z is the partition function, given by
+% \begin{equation}\label{eq:partition_function}
+%   Z = \sum_\beta e^{\frac{-E_\beta}{k_BT}} \text{.}
+% \end{equation}
+% At high temperature all the states have similar occurrence probability, but when T goes to zero only states with low energy are probable.
+%
+% Taking these concepts from thermodynamics the algorithm can be formulated as follows. First of all, the system is initiated in a random state, where all the spins are randomly chosen.
+% This configuration also represents an infinite temperature, where all the spins are free.
+% Then the temperature is slowly decreased and the spins are visited randomly according to the Metropolis-Hastings algorithm [1] N. Metropolis, A.W. Rosenbluth, M.N. Rosenbluth. A.H. Teller and E. Teller, J. Chem. Phys. 21 (1953) 1087-1092] and the spin is flipped (from $+1$ to $-1$ and vice versa) if the following conditions are true:
+% \begin{itemize}
+%   \item The energy of the system with the flipped spin is lower.
+%   \item $\chi < e^{-\frac{\Delta E}{T}}$, where $\chi \in \left[0,1\right]$ is randomly generated, T is the temperature of the system and $\Delta E$ is the energy difference between the system before and after the spin flip.
+% \end{itemize}
+%
+% After each step (one step consists in visiting $N$ spins randomly, where $N$ is the total number of the spins), the temperature is further decreased until it reaches the value 0.
+% With this procedure the system can do a coarse search for a minimum in the beginning, where it is allowed to accept more changes that increase the energy and then do a finer search in the end when $T$ is low.
+%
+% This is the basic SA algorithm that can be slightly modified to fit a specific problem.
+
+\section{Complexity theory}
+In order to have a good basic understanding of complexity theory I recommend the reader to take a look to some literature such as \cite{Garey} that gives a good overview on the matter. However, for this paper a brief introduction to k-SAT and the complexity classes is sufficient as well as necessary.
+
+K-SAT is one of the most important problems in complexity theory and was the first problem to be proven NP-Complete. K-SAT stands for the satisfiability problem of a formula in clausal normal form (CNF) of clause length k. A CNF formula is composed of boolean variables or their negation connected by ORs thus forming a clause, that is connected to other clauses by an AND. The k-SAT problem consists in figuring out whether such a formula is satisfiable by some specific configuration of variables. E.g. the 2-SAT formula $(a \vee b) \wedge (\neg a \vee b) \wedge (a \vee \neg b)$ is satisfiable with the configuration $a=\text{TRUE}, b=\text{TRUE}$, whereas $a \wedge \neg a$ is not satisfiable.
+
+Whereas k-SAT problems with few variables and few clauses look pretty easy to solve, the difficulty increases drastically with the problem size and for the worst case scenario the fastest known algorithms are exponential in the problem size ($\tau \sim e^N$, where N represents the system size) making this problem not efficiently solvable. Furthermore, this problem was the first to be proven to be in the complexity class NP-Complete \cite{Cook}.
+This class of problems is particularly important and interesting, since every problem in this class can be mapped in polynomial time on any other problem of the class NP (Non-deterministic polynomial time), that contains any problem with a solution that can be checked in polynomial time, or more colloquially all the interesting problems.
+This means, that if an algorithm was found that solves a problem in NP-Complete efficiently, then any other problem in the NP class could be solved efficiently (in polynomial time) as well, meaning that the size of the class NP would be equal to the size of the class P, representing problems solvable in polynomial time ($\tau \sim N^C$, where C is a fixed constant). This is also known as the P vs NP problem.
+
+Even though computational complexity theory is one of the central research topics for computer scientists, its study is also increasingly playing an important role in physics, since a lot of similarities between computational complexity and physical systems have been shown.
+From phase transitions \cite{Monasson} and critical behavior in k-SAT  \cite{Kirkpatrick} to Ising spin glass models or atomic clusters whose ground state finding problem is proven to be in NP-Complete \cite{Barahona} or quantum entanglement as a measure for complexity \cite{Chamon_entropies}, computational complexity theory can deliver a broader understanding of some physical problems and it can benefit from approaches motivated by statistical mechanics.
+
+As we will see in some results of this paper, the computational complexity of some physical systems is represented also in the difficulty of statistical mechanics derived algorithms, such as the M-H and the thereupon based simulated annealing ,in reaching the ground state, since the steps needed to thermalize and eventually reach the ground state grow exponentially with the system size.
+This exponential growth of the steps can be represented by the loss of ergodicity of the M-H algorithm so that the premises of the theorem \ref{th:equilibrium} are not longer satisfied and the system cannot reach the equilibrium distribution.
+Various papers \cite{Mauro} \cite{Carleo} \cite{Mackenzie} describe the loss of ergodicity in physical systems when the temperature is lowered, as these kind of systems, that have a `liquid' phase at high temperature where they show ergodicity and a so called `glassy' phase where the system gets stuck in a local metastable energy minimum with an almost unavoidable energy barrier, represent one of the few remaining unsolved and challenging issues in theoretical condensed matter \cite{Complex_behavior_of_glassy_systems}.
+
+Since the proof by Barahona \cite{Barahona} extended later by \cite{Istrail} showing that any non-planar Ising model is in NP-Complete, research in statistical mechanics of spin glass models and complexity theory have become more strongly connected leading to a lot of approaches that try to map problems in NP to spin models \cite{Lucas} and make use of methods and heuristics from statistical mechanics.
+This intuition that physics could help in solving efficiently computational problems has also led to the formulation of the vertex model discussed in the next section, which represents a classical, universal, reversible computation formed by logical gates and therefore belonging to the class NP-Complete.
+
+Finally, while the P vs NP problem still stays unanswered and will probably stay so for still longer, it is also very interesting to find practical or efficient algorithms for some less-than-worst-case instances of NP problems or even average scenarios, that are most relevant in practical applications. These scenarios are examined in this paper, where the simulated annealing approach tries to deliver a fast practical solution to some instances of an NP-Complete problem.
+
+
+\section{Vertex Model \label{sec:VM}}
+
+The Vertex Model that will be analyzed in this section and whereupon the simulations in this paper are based was presented in a recent work by Chamon et al. \cite{Chamon}.
+
+\begin{figure}[bhtp]
+  \centering
+  \includegraphics[width=0.7\textwidth]{Graphics/latticeplot.png}
+  \caption{Random instance of the lattice model with TOFFOLI (grey), IDID (yellow), SWID (red), IDSW (blue), SWSW (green) gates. The lines represent the edges between the gates that connect the bits, where thicker lines represent 2-bit bonds and thinner lines 1-bit bonds. The vertical axes has periodic boundary conditions (i.e. the longer lines) and the computation has input to the left and output to the right. \label{fig:latticeplot}}
+\end{figure}
+
+The presented model represents a 2D vertex lattice implementation of a classical, reversible computation.
+The main idea behind this implementation is that any Boolean function can be written using only 3-bit TOFFOLI gates \cite{Toffoli}.
+Therefore, given a particular 2D arrangement of the TOFFOLI gates that do the computation, the plane can be first filled with multiple SWAP gates in order to bring distant bits closer to each other until they are adjacent without letting edges intersect and secondly with trivial IDENTITY gates in order to get a 2D plane filling lattice. Finally, the gates IDENTITY and SWAP are combined together to form the four 3-bit gates IDID, SWID, IDSW, SWSW, that are required to have a vertex lattice with only 3-bit gates.
+An example of the final lattice can be seen in fig. \ref{fig:latticeplot}, where the input of the system is located on the left, the horizontal axes represents the computational time and the output is on the right.
+The lattice has periodic boundary conditions on the vertical axes and the gates are connected by either two bit bonds or one bit bonds in the horizontal direction.
+
+Once the computational lattice of gates is set up we need to map it onto a spin system and write the corresponding Hamiltonian, in order to transform it into a physical system.
+First of all, the Boolean variables $x_i = (1+\sigma_i)/2$ used for the computation are trivially mapped on spins $\sigma_i \in \{ -1, 1 \}$ and the operations made by the gates are encoded using only two-bodies interactions making use of ancillary bits similarly to the way they are introduced in \cite{Biamonte}.
+The energy function is then designed in such a way that correct outputs of the gate have the lowest energy and unsatisfying states have higher energies and are therefore unstable.
+
+The Hamiltonian governing the gates will not be of any significance in this paper since the SA runs will update whole gates (i.e. it will update 6 spins at once) and the gate constraints will always be satisfied. For the interested reader the energy function of the gates can be found in the original paper by Chamon et al.
+
+The edges (i.e. the lines connecting the gates in fig. \ref{fig:latticeplot}) that connect the bits from one gate to the other are transformed in ferromagnetic bonds with constant $K>0$ connecting the output bit of one gate to the input bit of the other gate. This leads to the term in the system Hamiltonian for the edges:
+
+\begin{equation}
+  H_{\text{Edges}} = - K \sum_{\langle i, j \rangle} \sigma _i \sigma _j \text{,}
+\end{equation}
+where $\sum_ {\langle i, j \rangle}$ stands for the sum over all the spins connected by edges at the boundaries of the gates.
+
+Finally, to complete the mapping of the computation to a spin system we need to implement the boundary conditions, that in the computation are given by the input bits at the boundary. This is easily done by adding a strong magnetic field on the corresponding bit sites resulting in the Hamiltonian
+\begin{equation}
+  H_{\text{boundary}}= - \sum_{i\in \text{boundary}} h_i \sigma_i \text{,}
+\end{equation}
+where $h_i>0$ for $x_i = 1$, $h_i<0$ for $x_i = 0$ and $h_i=0$ if the bit is not fixed.
+
+The resulting classical Hamiltonian is then given by
+\begin{equation}
+  H_C = \sum_g E_g^J  \left( \{ \sigma \} _g \right) - K \sum _{\langle i, j \rangle} \sigma_i \sigma_j - \sum_{i\in \text{boundary}} h_i \sigma_i \text{,}
+\end{equation}
+where the first sum is over all the gates g and $E_g^J \left( \{ \sigma \} _g \right)$ is the energy function of the gate which depends on the configuration of the spins of the gate $\{ \sigma \} _g$.
+
+In \cite{Chamon} it is shown how this vertex model can be mapped on the Chimera architecture of the D-Wave machine by using a quantum Hamiltonian with quantum spins instead of the here presented classical Hamiltonian. Moreover, it is shown how the complexity of a ground-state computation cannot be revealed by thermodynamics alone, but can be seen in the dynamics of the system's relaxation into the ground state, which will be studied in this paper.
